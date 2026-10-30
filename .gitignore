@@ -1,0 +1,18 @@
+# Geheimnisse & lokale Konfiguration
+/config.php
+.env
+
+# Laufzeitdaten (Verzeichnisse bleiben über .gitkeep erhalten)
+/storage/uploads/*
+/storage/logs/*
+/storage/sessions/*
+!/storage/uploads/.gitkeep
+!/storage/logs/.gitkeep
+!/storage/sessions/.gitkeep
+
+# Sonstiges
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

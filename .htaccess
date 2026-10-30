@@ -1,0 +1,15 @@
+# Fallback, falls das Document-Root der Domain NICHT auf /public zeigt.
+# Empfohlen ist, das Document-Root im netcup WSC direkt auf den Ordner "public" zu setzen.
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Alles ausser /public sperren
+    RewriteRule ^(src|views|storage|bin|\.git)(/|$) - [F,L]
+    RewriteRule ^(config\.php|cron\.php|schema\.sql|README\.md|composer\..*)$ - [F,L]
+
+    # Rest nach /public weiterleiten
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
