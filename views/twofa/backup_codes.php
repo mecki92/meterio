@@ -7,6 +7,6 @@
     <div class="d-flex flex-wrap gap-2 no-print">
         <button type="button" data-copy="#codes" class="btn btn-outline-secondary"><i class="bi bi-clipboard"></i> Kopieren</button>
         <button type="button" data-print class="btn btn-outline-secondary"><i class="bi bi-printer"></i> Drucken</button>
-        <a class="btn btn-primary" href="<?= e(url('dashboard')) ?>">Ich habe die Codes gesichert</a>
+        <a class="btn btn-primary" href="<?= e(url(Auth::home())) ?>">Ich habe die Codes gesichert</a>
     </div>
 </div></div>

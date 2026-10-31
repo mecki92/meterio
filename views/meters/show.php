@@ -2,15 +2,23 @@
 /** @var array $meter @var array $readings (absteigend) @var array $stats */
 $reasons = reading_reasons();
 $kw = static fn(float $v) => number_format($v, 0, ',', '.');
+$isOwner = ($meter['access'] ?? 'owner') === 'owner';
+$canWrite = $isOwner || ($meter['access'] ?? '') === 'write';
 ?>
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
     <h2 class="h3 m-0"><?= e($meter['name']) ?><?php if ($meter['archived']): ?> <span class="chip chip-muted align-middle ms-2">archiviert</span><?php endif; ?></h2>
     <div class="d-flex gap-2">
-        <a class="btn btn-primary" href="<?= e(url('meters/' . $meter['id'] . '/readings/new')) ?>"><i class="bi bi-plus-lg"></i> Ablesung</a>
+        <?php if ($canWrite): ?><a class="btn btn-primary" href="<?= e(url('meters/' . $meter['id'] . '/readings/new')) ?>"><i class="bi bi-plus-lg"></i> Ablesung</a><?php endif; ?>
         <a class="btn btn-outline-secondary" href="<?= e(url('meters/' . $meter['id'] . '/stats')) ?>"><i class="bi bi-bar-chart-line"></i> Statistik</a>
-        <a class="btn btn-outline-secondary" href="<?= e(url('meters/' . $meter['id'] . '/edit')) ?>">Bearbeiten</a>
+        <?php if ($isOwner): ?><a class="btn btn-outline-secondary" href="<?= e(url('meters/' . $meter['id'] . '/edit')) ?>">Bearbeiten</a><?php endif; ?>
     </div>
 </div>
+<?php if (!$isOwner): ?>
+<div class="alert alert-info py-2 small d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <span><i class="bi bi-people"></i> Freigegeben von <b><?= e($meter['owner_name']) ?></b> · <?= $canWrite ? 'du kannst Zählerstände erfassen' : 'nur Ansicht' ?>. Verträge und Kosten sind nicht freigegeben.</span>
+    <form method="post" action="<?= e(url('meters/' . $meter['id'] . '/leave')) ?>" class="m-0" data-confirm="Freigabe verlassen? Du siehst den Zähler danach nicht mehr."><?= csrf_field() ?><button class="btn btn-sm btn-outline-secondary" type="submit">Freigabe verlassen</button></form>
+</div>
+<?php endif; ?>
 <div class="d-flex flex-wrap gap-2 align-items-center mb-3 small">
     <span class="chip"><i class="bi <?= $meter['kind'] === 'analog' ? 'bi-speedometer' : 'bi-cpu' ?>"></i> <?= $meter['kind'] === 'analog' ? 'Analog' : 'Digital (OBIS)' ?></span>
     <?php if ($meter['location'] !== ''): ?><span class="chip"><i class="bi bi-geo-alt"></i> <?= e($meter['location']) ?></span><?php endif; ?>
@@ -22,7 +30,7 @@ $kw = static fn(float $v) => number_format($v, 0, ',', '.');
 
 <div class="card my-3">
     <div class="card-header split"><span><i class="bi bi-journal-text"></i> Ablesungen <span class="badge rounded-pill text-bg-secondary ms-1"><?= count($readings) ?></span></span>
-        <a class="btn btn-sm btn-primary" href="<?= e(url('meters/' . $meter['id'] . '/readings/new')) ?>"><i class="bi bi-plus-lg"></i> Neue Ablesung</a></div>
+        <?php if ($canWrite): ?><a class="btn btn-sm btn-primary" href="<?= e(url('meters/' . $meter['id'] . '/readings/new')) ?>"><i class="bi bi-plus-lg"></i> Neue Ablesung</a><?php endif; ?></div>
     <?php if (!$readings): ?>
         <div class="card-body text-body-secondary">Noch keine Ablesung erfasst.</div>
     <?php else: ?>
@@ -67,7 +75,7 @@ $kw = static fn(float $v) => number_format($v, 0, ',', '.');
                 <?php endforeach; ?>
                 <td class="d-none d-md-table-cell"><span class="chip chip-<?= e($rc) ?>"><?= e($rl) ?></span></td>
                 <td class="text-nowrap"><?php foreach ($rd['photos'] as $pi => $p): ?><a class="btn btn-sm btn-outline-secondary px-2 py-0" href="<?= e(url('photos/' . $p['id'])) ?>" target="_blank" rel="noopener" title="Foto <?= $pi + 1 ?>"><i class="bi bi-camera"></i></a> <?php endforeach; ?></td>
-                <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="<?= e(url('readings/' . $rd['id'] . '/edit')) ?>" title="Bearbeiten" aria-label="Bearbeiten"><i class="bi bi-pencil"></i></a></td>
+                <td class="text-end"><?php if ($isOwner || ($canWrite && (int) ($rd['created_by'] ?? 0) === $uid)): ?><a class="btn btn-sm btn-outline-secondary" href="<?= e(url('readings/' . $rd['id'] . '/edit')) ?>" title="Bearbeiten" aria-label="Bearbeiten"><i class="bi bi-pencil"></i></a><?php endif; ?></td>
             </tr>
         <?php endforeach; ?>
         </tbody>
@@ -80,6 +88,54 @@ $kw = static fn(float $v) => number_format($v, 0, ',', '.');
     <?php endif; ?>
 </div>
 
+<?php if ($isOwner): ?>
+<div class="card my-3" id="freigabe">
+    <div class="card-header"><i class="bi bi-people"></i> Zähler teilen<?= info('Mit einem Freigabe-Code können andere Benutzer diesen Zähler sehen und – je nach Berechtigung – Zählerstände erfassen. Deine Verträge, Kosten und Zahlungen werden niemals geteilt. Der Code ist 7 Tage gültig und nur einmal verwendbar. Der Zugriff gilt höchstens 365 Tage und lässt sich verlängern oder jederzeit löschen.') ?></div>
+    <div class="card-body">
+        <?php if (!empty($newShare)): ?>
+            <div class="alert alert-success">
+                <div class="small mb-1">Neuer Freigabe-Code (<?= $newShare['perm'] === 'write' ? 'Ablesen &amp; erfassen' : 'nur Ansicht' ?>, <?= (int) $newShare['days'] ?> Tage zum Einlösen, danach <?= (int) $newShare['access'] ?> Tage Zugriff) – wird nur jetzt angezeigt:</div>
+                <div class="d-flex flex-wrap align-items-center gap-2"><code class="fs-4 user-select-all" id="share-code"><?= e($newShare['code']) ?></code>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-copy="#share-code"><i class="bi bi-clipboard"></i> Kopieren</button></div>
+                <div class="small mt-2">Gib den Code der Person weiter. Sie löst ihn unter <b>Zähler → Freigabecode einlösen</b> ein.</div>
+            </div>
+        <?php endif; ?>
+        <?php if ($shares): ?>
+            <ul class="list-group mb-3">
+            <?php foreach ($shares as $sh): ?>
+                <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <span><i class="bi <?= $sh['redeemed'] ? 'bi-person-check' : 'bi-hourglass-split' ?>"></i>
+                        <b><?= e($sh['redeemed'] ? $sh['user_name'] : ($sh['label'] !== '' ? $sh['label'] : 'Offene Einladung')) ?></b>
+                        <?php if ($sh['redeemed'] && $sh['label'] !== ''): ?><span class="text-body-secondary small">(<?= e($sh['label']) ?>)</span><?php endif; ?>
+                        <span class="chip ms-1"><?= $sh['permission'] === 'write' ? 'Ablesen &amp; erfassen' : 'Nur ansehen' ?></span>
+                        <?php if (!$sh['redeemed']): ?><span class="chip chip-<?= $sh['expired'] ? 'muted' : 'info' ?> ms-1"><?= $sh['expired'] ? 'abgelaufen' : 'Code offen bis ' . e(fmt_date($sh['expires_at'])) ?></span>
+                        <?php elseif ($sh['access_until']): ?><span class="chip chip-<?= $sh['access_expired'] ? 'muted' : ($sh['days_left'] < 30 ? 'warning' : 'info') ?> ms-1"><?= $sh['access_expired'] ? 'Zugriff abgelaufen am ' : 'Zugriff bis ' ?><?= e(fmt_date($sh['access_until'])) ?></span><?php endif; ?></span>
+                    <span class="d-flex flex-wrap gap-2">
+                    <?php if ($sh['redeemed']): ?>
+                        <form method="post" action="<?= e(url('shares/' . $sh['id'] . '/extend')) ?>" class="m-0 d-flex gap-1"><?= csrf_field() ?>
+                            <select name="duration" class="form-select form-select-sm w-auto" aria-label="Verlängern um"><?php foreach ([30 => '30 Tage', 90 => '90 Tage', 180 => '180 Tage', 365 => '365 Tage'] as $d => $l): ?><option value="<?= $d ?>" <?= $d === 365 ? 'selected' : '' ?>><?= $l ?></option><?php endforeach; ?></select>
+                            <button class="btn btn-sm btn-outline-primary" type="submit"><i class="bi bi-arrow-repeat"></i> Verlängern</button></form>
+                    <?php endif; ?>
+                    <form method="post" action="<?= e(url('shares/' . $sh['id'] . '/revoke')) ?>" class="m-0" data-confirm="<?= $sh['redeemed'] ? 'Zugriff entziehen und Freigabe löschen?' : 'Code löschen?' ?>"><?= csrf_field() ?><button class="btn btn-sm btn-outline-danger" type="submit"><i class="bi bi-trash"></i> <?= $sh['redeemed'] ? 'Zugriff entziehen' : 'Code löschen' ?></button></form>
+                    </span>
+                </li>
+            <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+        <form method="post" action="<?= e(url('meters/' . $meter['id'] . '/shares')) ?>" class="row g-2 align-items-end">
+            <?= csrf_field() ?>
+            <div class="col-sm-3"><label class="form-label small mb-1" for="sh-label">Bezeichnung (optional)</label><input id="sh-label" name="label" class="form-control" maxlength="60" placeholder="z. B. Sohn"></div>
+            <div class="col-sm-3"><label class="form-label small mb-1" for="sh-dur">Zugriff gültig für</label>
+                <select id="sh-dur" name="duration" class="form-select"><option value="30">30 Tage</option><option value="90">90 Tage</option><option value="180">180 Tage</option><option value="365" selected>365 Tage (Maximum)</option></select></div>
+            <div class="col-sm-3"><label class="form-label small mb-1" for="sh-perm">Berechtigung</label>
+                <select id="sh-perm" name="permission" class="form-select"><option value="write">Ablesen &amp; Zählerstände erfassen</option><option value="read">Nur ansehen</option></select></div>
+            <div class="col-sm-3"><button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-key"></i> Code erzeugen</button></div>
+        </form>
+    </div>
+</div>
+<?php endif; ?>
+
+<?php if ($isOwner): ?>
 <details class="mt-4">
     <summary class="text-danger">Zähler löschen</summary>
     <p class="mt-2">Löscht den Zähler mit allen Registern, Ablesungen, Fotos und zugehörigen Verträgen/Zahlungen unwiderruflich.</p>
@@ -87,3 +143,4 @@ $kw = static fn(float $v) => number_format($v, 0, ',', '.');
         <?= csrf_field() ?><button type="submit" class="btn btn-danger">Endgültig löschen</button>
     </form>
 </details>
+<?php endif; ?>

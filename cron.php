@@ -23,7 +23,7 @@ $log = static function (string $m): void {
 };
 
 $today = new DateTimeImmutable('today');
-$users = Db::all("SELECT * FROM users WHERE is_active = 1 AND twofa_ready = 1 AND reminder_mode <> 'off'");
+$users = Db::all("SELECT * FROM users WHERE is_active = 1 AND role <> 'admin' AND twofa_ready = 1 AND reminder_mode <> 'off'");
 $sent = 0;
 
 foreach ($users as $u) {

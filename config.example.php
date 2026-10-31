@@ -15,6 +15,11 @@ return [
         'idle_timeout' => 7200,       // Sekunden Inaktivität bis zum Auto-Logout
     ],
 
+    'security' => [
+        'login_notify' => true,       // Info-Mail bei jeder Anmeldung (Zeit, Gerät, IP, Ort)
+        'geo_lookup'   => true,       // ungefährer Ort zur IP (Abfrage bei ipwho.is) – auf false setzen, um keine IP weiterzugeben
+    ],
+
     'db' => [
         'host'    => 'localhost',     // netcup: Hostname aus dem WSC (z. B. mysql12.netcup.net)
         'name'    => 'k12345_meterio',

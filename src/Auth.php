@@ -80,6 +80,23 @@ final class Auth
         return $u;
     }
 
+    /** Zähler, Verträge & Co.: nur für Standard-Benutzer. Administratoren verwalten ausschließlich Benutzer. */
+    public static function requireUser(): array
+    {
+        $u = self::require();
+        if ($u['role'] === 'admin') {
+            abort(403, 'Administratoren verwalten nur Benutzer – Zähler und Verträge sind Standard-Benutzern vorbehalten.');
+        }
+        return $u;
+    }
+
+    /** Startseite nach der Anmeldung. */
+    public static function home(?array $u = null): string
+    {
+        $u ??= self::user();
+        return $u && $u['role'] === 'admin' ? 'admin/users' : 'dashboard';
+    }
+
     public static function requireAdmin(): array
     {
         $u = self::require();
@@ -95,6 +112,7 @@ final class Auth
         $_SESSION = ['uid' => (int) $user['id'], 'last' => time(), 'csrf' => bin2hex(random_bytes(32))];
         Db::exec('UPDATE users SET last_login_at = NOW() WHERE id = ?', [$user['id']]);
         self::$cached = null;
+        LoginNotice::handle($user);
     }
 
     public static function logout(): void

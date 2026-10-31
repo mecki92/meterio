@@ -5,18 +5,23 @@ final class MeterController
 {
     public function index(): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         $meters = Repo::meters((int) $u['id'], true);
         foreach ($meters as &$m) {
             $m['stats'] = Calc::meterStats($m, Repo::readings($m['id']));
         }
         unset($m);
-        view('meters/index', ['title' => 'Zähler', 'active' => 'meters', 'meters' => $meters]);
+        $shared = Repo::sharedMeters((int) $u['id']);
+        foreach ($shared as &$m) {
+            $m['stats'] = Calc::meterStats($m, Repo::readings($m['id']));
+        }
+        unset($m);
+        view('meters/index', ['title' => 'Zähler', 'active' => 'meters', 'meters' => $meters, 'shared' => $shared]);
     }
 
     public function create(): void
     {
-        Auth::require();
+        Auth::requireUser();
         view('meters/form', [
             'title' => 'Neuer Zähler', 'active' => 'meters', 'meter' => ['id' => 0, 'name' => '', 'location' => '', 'note' => '', 'kind' => 'digital', 'archived' => 0, 'tariff_model' => 'single',
                 'registers' => [['id' => 0, 'obis' => '1.8.0', 'label' => 'Bezug', 'tariff' => 'ET']]],
@@ -25,7 +30,7 @@ final class MeterController
 
     public function store(): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         [$data, $regs, $err] = $this->input([]);
         if ($err) {
             flash('error', $err);
@@ -49,24 +54,30 @@ final class MeterController
 
     public function show(int $id): void
     {
-        $u = Auth::require();
-        $m = $this->own($u, $id);
+        $u = Auth::requireUser();
+        $m = Repo::meterShared((int) $u['id'], $id) ?? abort(404, 'Zähler nicht gefunden.');
         $asc = Repo::readings($id);
         $stats = Calc::meterStats($m, $asc);
-        view('meters/show', ['title' => $m['name'], 'active' => 'meters', 'meter' => $m, 'readings' => array_reverse($asc), 'stats' => $stats]);
+        $new = null;
+        if ($m['access'] === 'owner' && !empty($_SESSION['new_share']) && (int) $_SESSION['new_share']['meter'] === $id) {
+            $new = $_SESSION['new_share'];
+            unset($_SESSION['new_share']);   // Code wird nur einmal angezeigt
+        }
+        view('meters/show', ['title' => $m['name'], 'active' => 'meters', 'meter' => $m, 'readings' => array_reverse($asc), 'stats' => $stats,
+            'shares' => $m['access'] === 'owner' ? Repo::shares($id) : [], 'newShare' => $new, 'uid' => (int) $u['id']]);
     }
 
     public function stats(int $id): void
     {
-        $u = Auth::require();
-        $m = $this->own($u, $id);
+        $u = Auth::requireUser();
+        $m = Repo::meterShared((int) $u['id'], $id) ?? abort(404, 'Zähler nicht gefunden.');
         $series = Repo::series(Repo::readings($id));
         view('meters/stats', ['title' => 'Statistik ' . $m['name'], 'active' => 'meters', 'meter' => $m, 'st' => Calc::meterStatistics($m, $series)]);
     }
 
     public function edit(int $id): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         $m = $this->own($u, $id);
         $m['tariff_model'] = $this->modelOf($m['registers']);
         view('meters/form', ['title' => 'Zähler bearbeiten', 'active' => 'meters', 'meter' => $m]);
@@ -74,7 +85,7 @@ final class MeterController
 
     public function update(int $id): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         $existing = $this->own($u, $id);
         [$data, $regs, $err] = $this->input($existing['registers']);
         if ($err) {
@@ -107,7 +118,7 @@ final class MeterController
 
     public function delete(int $id): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         $this->own($u, $id);
         Repo::deletePhotoFilesForMeter((int) $u['id'], $id);
         Db::exec('DELETE FROM meters WHERE id=? AND user_id=?', [$id, $u['id']]); // Ablesungen, Register, Verträge: CASCADE

@@ -22,6 +22,11 @@ final class ProfileController
             flash('error', 'Name darf nicht leer sein.');
             redirect('profile');
         }
+        if ($u['role'] === 'admin') {   // Administratoren: nur der Name (keine Zähler, keine Benachrichtigungen)
+            Db::exec('UPDATE users SET name=? WHERE id=?', [$name, $u['id']]);
+            flash('ok', 'Profil gespeichert.');
+            redirect('profile');
+        }
         Db::exec('UPDATE users SET name=?, reminder_mode=?, reminder_day=?, notify_reading=? WHERE id=?', [$name, $mode, $day, isset($_POST['notify_reading']) ? 1 : 0, $u['id']]);
         flash('ok', 'Profil gespeichert.');
         redirect('profile');

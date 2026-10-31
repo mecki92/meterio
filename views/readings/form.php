@@ -67,6 +67,13 @@ $maxMb = (int) Config::get('uploads.max_size_mb', 12);
                             <button type="button" class="btn btn-primary flex-fill" id="btn-camera"><i class="bi bi-camera-fill"></i> Foto aufnehmen</button>
                             <button type="button" class="btn btn-outline-secondary flex-fill" id="btn-gallery"><i class="bi bi-images"></i> Aus Galerie / Datei</button>
                         </div>
+                        <div id="camlayer" class="camlayer" hidden>
+                            <video id="camvideo" playsinline muted autoplay></video>
+                            <div class="cambar">
+                                <button type="button" class="btn btn-light" id="cam-cancel"><i class="bi bi-x-lg"></i> Abbrechen</button>
+                                <button type="button" class="btn btn-primary btn-lg" id="cam-shot"><i class="bi bi-camera-fill"></i> Aufnehmen</button>
+                            </div>
+                        </div>
                         <input type="file" id="in-camera" accept="image/*" capture="environment" hidden>
                         <input type="file" id="in-files" name="photos[]" accept="image/*" multiple hidden>
                         <div class="thumbs mt-3" id="newthumbs"></div>

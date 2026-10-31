@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS readings (
   read_at DATETIME NOT NULL,
   reason VARCHAR(20) NOT NULL DEFAULT 'regular',
   note_enc TEXT NULL,
+  created_by INT UNSIGNED NULL,
   created_at DATETIME NOT NULL,
   PRIMARY KEY (id),
   KEY ix_readings_meter (meter_id, read_at),
@@ -162,3 +163,25 @@ CREATE TABLE IF NOT EXISTS payments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- Freigabe eines Zählers für andere Benutzer (nur der Zähler, nie die Verträge).
+-- Einladung: token_hash gesetzt, user_id NULL; nach dem Einlösen: user_id gesetzt, token_hash NULL.
+CREATE TABLE IF NOT EXISTS meter_shares (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  meter_id INT UNSIGNED NOT NULL,
+  user_id INT UNSIGNED NULL,
+  token_hash CHAR(64) NULL,
+  permission ENUM('read','write') NOT NULL DEFAULT 'write',
+  label_enc TEXT NULL,
+  expires_at DATETIME NULL,
+  redeemed_at DATETIME NULL,
+  duration_days SMALLINT UNSIGNED NULL,
+  access_until DATETIME NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY ux_share_token (token_hash),
+  KEY ix_share_meter (meter_id),
+  KEY ix_share_user (user_id),
+  CONSTRAINT fk_share_meter FOREIGN KEY (meter_id) REFERENCES meters (id) ON DELETE CASCADE,
+  CONSTRAINT fk_share_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

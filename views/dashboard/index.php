@@ -18,6 +18,18 @@
     <?php endif; ?>
 </div>
 
+<?php foreach ($expiring ?? [] as $x): $url = e(url('meters/' . $x['meter_id'] . ($x['role'] === 'owner' ? '#freigabe' : ''))); ?>
+    <div class="alert alert-<?= $x['expired'] ? 'danger' : 'warning' ?> d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <span><i class="bi bi-hourglass-split"></i>
+        <?php if ($x['role'] === 'owner'): ?>
+            Die Freigabe von <b><?= e($x['meter']) ?></b> für <b><?= e($x['other']) ?></b> <?= $x['expired'] ? 'ist am ' . e(fmt_date($x['until'])) . ' abgelaufen.' : 'läuft in ' . (int) $x['days'] . ' Tag' . ($x['days'] === 1 ? '' : 'en') . ' ab (' . e(fmt_date($x['until'])) . ').' ?>
+        <?php else: ?>
+            Dein Zugriff auf <b><?= e($x['meter']) ?></b> (von <?= e($x['other']) ?>) endet in <?= (int) $x['days'] ?> Tag<?= $x['days'] === 1 ? '' : 'en' ?> (<?= e(fmt_date($x['until'])) ?>).
+        <?php endif; ?></span>
+        <?php if ($x['role'] === 'owner'): ?><a class="btn btn-sm btn-outline-secondary" href="<?= $url ?>">Verlängern / verwalten</a><?php endif; ?>
+    </div>
+<?php endforeach; ?>
+
 <?php if (!$meters): ?>
     <div class="card"><div class="card-body p-4">
         <p class="fs-5">Willkommen bei <b>meterio</b>! So geht’s los:</p>

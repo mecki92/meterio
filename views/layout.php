@@ -6,6 +6,7 @@ $nav = [
     'meters'    => ['meters', 'Zähler', 'bi-lightning-charge'],
     'contracts' => ['contracts', 'Verträge', 'bi-file-earmark-text'],
 ];
+if ($user && $user['role'] === 'admin') { $nav = []; }   // Administratoren verwalten nur Benutzer
 $alertClass = ['ok' => 'success', 'warn' => 'warning', 'error' => 'danger'];
 ?><!doctype html>
 <html lang="de" data-bs-theme="light">
@@ -29,7 +30,7 @@ $alertClass = ['ok' => 'success', 'warn' => 'warning', 'error' => 'danger'];
 <body class="d-flex flex-column min-vh-100">
 <nav class="navbar navbar-expand-md site-nav">
     <div class="container-xxl">
-        <a class="navbar-brand fw-bold" href="<?= e(url($user ? 'dashboard' : 'login')) ?>">
+        <a class="navbar-brand fw-bold" href="<?= e(url($user ? Auth::home($user) : 'login')) ?>">
             <i class="bi bi-lightning-charge-fill bolt"></i> meterio <small class="fw-normal opacity-75">by MeckByte</small>
         </a>
         <?php if ($user): ?>
@@ -50,7 +51,7 @@ $alertClass = ['ok' => 'success', 'warn' => 'warning', 'error' => 'danger'];
     <button class="btn btn-sm btn-outline-secondary theme-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Darstellung">
         <i class="bi bi-circle-half ico ico-auto"></i><i class="bi bi-sun-fill ico ico-light"></i><i class="bi bi-moon-stars-fill ico ico-dark"></i>
     </button>
-    <ul class="dropdown-menu dropdown-menu-end">
+    <ul class="dropdown-menu dropdown-menu-md-end">
         <li><button class="dropdown-item" type="button" data-theme-set="auto"><i class="bi bi-circle-half"></i> Automatisch</button></li>
         <li><button class="dropdown-item" type="button" data-theme-set="light"><i class="bi bi-sun"></i> Hell</button></li>
         <li><button class="dropdown-item" type="button" data-theme-set="dark"><i class="bi bi-moon-stars"></i> Dunkel</button></li>
@@ -66,7 +67,7 @@ $alertClass = ['ok' => 'success', 'warn' => 'warning', 'error' => 'danger'];
     <button class="btn btn-sm btn-outline-secondary theme-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Darstellung">
         <i class="bi bi-circle-half ico ico-auto"></i><i class="bi bi-sun-fill ico ico-light"></i><i class="bi bi-moon-stars-fill ico ico-dark"></i>
     </button>
-    <ul class="dropdown-menu dropdown-menu-end">
+    <ul class="dropdown-menu dropdown-menu-md-end">
         <li><button class="dropdown-item" type="button" data-theme-set="auto"><i class="bi bi-circle-half"></i> Automatisch</button></li>
         <li><button class="dropdown-item" type="button" data-theme-set="light"><i class="bi bi-sun"></i> Hell</button></li>
         <li><button class="dropdown-item" type="button" data-theme-set="dark"><i class="bi bi-moon-stars"></i> Dunkel</button></li>

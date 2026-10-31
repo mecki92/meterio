@@ -49,7 +49,7 @@ final class AuthController
     public function loginForm(): void
     {
         if (Auth::user()) {
-            redirect('dashboard');
+            redirect(Auth::home());
         }
         if ((int) Db::val('SELECT COUNT(*) FROM users') === 0) {
             redirect('setup');
@@ -142,7 +142,7 @@ final class AuthController
             $left = Auth::unusedBackupCodes((int) $user['id']);
             flash('warn', "Ein Backup-Code wurde verwendet. Noch $left übrig – im Profil kannst du neue erzeugen.");
         }
-        redirect('dashboard');
+        redirect(Auth::home($user));
     }
 
     public function twofaResend(): void

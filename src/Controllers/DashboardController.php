@@ -5,12 +5,15 @@ final class DashboardController
 {
     public function home(): void
     {
-        redirect(Auth::user() ? 'dashboard' : 'login');
+        redirect(Auth::user() ? Auth::home() : 'login');
     }
 
     public function index(): void
     {
-        $u = Auth::require();
+        if ((Auth::user()['role'] ?? '') === 'admin') {
+            redirect('admin/users');
+        }
+        $u = Auth::requireUser();
         $meters = Repo::meters((int) $u['id']);
         $want = (int) ($_GET['meter'] ?? 0);
         $sel = null;
@@ -49,6 +52,7 @@ final class DashboardController
         view('dashboard/index', [
             'title' => 'Dashboard', 'active' => 'dashboard', 'meters' => $meters, 'sel' => $sel, 'cards' => $cards,
             'years' => $years, 'activeContract' => $activeContract, 'last' => $last ?? null,
+            'expiring' => Repo::expiringShares((int) $u['id']),
         ]);
     }
 

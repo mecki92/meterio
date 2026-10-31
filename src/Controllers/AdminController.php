@@ -6,7 +6,7 @@ final class AdminController
     public function index(): void
     {
         Auth::requireAdmin();
-        $users = Db::all('SELECT u.*, (SELECT COUNT(*) FROM meters m WHERE m.user_id=u.id) AS meter_count FROM users u ORDER BY u.id');
+        $users = Db::all('SELECT u.*, (SELECT COUNT(*) FROM meters m WHERE m.user_id=u.id) AS meter_count, (SELECT COUNT(*) FROM contracts c2 WHERE c2.user_id=u.id) AS contract_count, ((SELECT COUNT(*) FROM meters m WHERE m.user_id=u.id) + (SELECT COUNT(*) FROM contracts c WHERE c.user_id=u.id) + (SELECT COUNT(*) FROM meter_shares sh WHERE sh.user_id=u.id)) AS data_count FROM users u ORDER BY u.id');
         view('admin/users', ['title' => 'Benutzerverwaltung', 'active' => 'admin', 'users' => $users]);
     }
 
@@ -64,6 +64,30 @@ final class AdminController
         }
         Db::exec('UPDATE users SET is_active = 1 - is_active WHERE id = ?', [$id]);
         flash('ok', $u['is_active'] ? 'Konto deaktiviert.' : 'Konto aktiviert.');
+        redirect('admin/users');
+    }
+
+    /** Rolle wechseln (Standard-User <-> Administrator). Es muss immer mindestens ein aktiver Administrator bleiben. */
+    public function role(int $id): void
+    {
+        $admin = Auth::requireAdmin();
+        $u = $this->target($id);
+        if ($u['id'] === (int) $admin['id']) {
+            flash('error', 'Du kannst deine eigene Rolle nicht ändern – melde dich dafür mit einem anderen Administrator an.');
+            redirect('admin/users');
+        }
+        $new = $u['role'] === 'admin' ? 'user' : 'admin';
+        if ($new === 'admin') {
+            $m = (int) Db::val('SELECT COUNT(*) FROM meters WHERE user_id = ?', [$id]);
+            $c = (int) Db::val('SELECT COUNT(*) FROM contracts WHERE user_id = ?', [$id]);
+            $sh = (int) Db::val('SELECT COUNT(*) FROM meter_shares WHERE user_id = ?', [$id]);
+            if ($m + $c + $sh > 0) {
+                flash('error', $u['email'] . ' kann kein Administrator werden: Es sind noch Zähler, Verträge oder geteilte Zähler hinterlegt. Diese müssen zuerst gelöscht bzw. der Zugriff entzogen werden.');
+                redirect('admin/users');
+            }
+        }
+        Db::exec('UPDATE users SET role = ? WHERE id = ?', [$new, $id]);
+        flash('ok', $u['email'] . ' ist jetzt ' . ($new === 'admin' ? 'Administrator (verwaltet nur Benutzer, keine Zähler/Verträge).' : 'Standard-Benutzer.'));
         redirect('admin/users');
     }
 

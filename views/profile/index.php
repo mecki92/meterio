@@ -28,6 +28,7 @@ $modes = [
             </div>
         </div>
 
+        <?php if ($u['role'] !== 'admin'): /* Administratoren haben keine Zähler: keine Erinnerungen/Benachrichtigungen */ ?>
         <div class="card mb-3">
             <div class="card-header"><i class="bi bi-bell"></i> E-Mail-Benachrichtigungen</div>
             <div class="card-body">
@@ -52,6 +53,7 @@ $modes = [
                 </div>
             </div>
         </div>
+        <?php endif; ?>
         <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Speichern</button>
     </form>
 </div>

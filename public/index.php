@@ -67,6 +67,14 @@ $r->get('/meters/{id}/edit', ['MeterController', 'edit']);
 $r->post('/meters/{id}', ['MeterController', 'update']);
 $r->post('/meters/{id}/delete', ['MeterController', 'delete']);
 
+// Zähler teilen (nur der Zähler, nie die Verträge)
+$r->post('/meters/{id}/shares', ['ShareController', 'create']);
+$r->post('/shares/{id}/revoke', ['ShareController', 'revoke']);
+$r->post('/shares/{id}/extend', ['ShareController', 'extend']);
+$r->post('/meters/{id}/leave', ['ShareController', 'leave']);
+$r->get('/shares/redeem', ['ShareController', 'redeemForm']);
+$r->post('/shares/redeem', ['ShareController', 'redeem']);
+
 // Ablesungen & Fotos
 $r->get('/meters/{id}/readings/new', ['ReadingController', 'create']);
 $r->post('/meters/{id}/readings/check', ['ReadingController', 'check']);
@@ -94,6 +102,7 @@ $r->get('/admin/users', ['AdminController', 'index']);
 $r->get('/admin/users/new', ['AdminController', 'create']);
 $r->post('/admin/users', ['AdminController', 'store']);
 $r->post('/admin/users/{id}/toggle', ['AdminController', 'toggle']);
+$r->post('/admin/users/{id}/role', ['AdminController', 'role']);
 $r->post('/admin/users/{id}/reset-2fa', ['AdminController', 'reset2fa']);
 $r->post('/admin/users/{id}/reset-password', ['AdminController', 'resetPassword']);
 $r->post('/admin/users/{id}/delete', ['AdminController', 'delete']);

@@ -5,7 +5,7 @@ final class ContractController
 {
     public function index(): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         $meters = [];
         foreach (Repo::meters((int) $u['id'], true) as $m) {
             $meters[$m['id']] = $m;
@@ -30,7 +30,7 @@ final class ContractController
 
     public function create(): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         $meters = Repo::meters((int) $u['id']);
         if (!$meters) {
             flash('warn', 'Lege zuerst einen Zähler an.');
@@ -41,7 +41,7 @@ final class ContractController
 
     public function store(): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         [$row, $err] = $this->input($u);
         if ($err) {
             flash('error', $err);
@@ -56,7 +56,7 @@ final class ContractController
 
     public function show(int $id): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         $c = $this->own($u, $id);
         $m = Repo::meter((int) $u['id'], $c['meter_id']);
         $payments = Repo::payments($id);
@@ -85,13 +85,13 @@ final class ContractController
 
     public function edit(int $id): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         view('contracts/form', ['title' => 'Vertrag bearbeiten', 'active' => 'contracts', 'meters' => Repo::meters((int) $u['id']), 'c' => $this->own($u, $id)]);
     }
 
     public function update(int $id): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         $this->own($u, $id);
         [$row, $err] = $this->input($u);
         if ($err) {
@@ -107,7 +107,7 @@ final class ContractController
 
     public function delete(int $id): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         $this->own($u, $id);
         Db::exec('DELETE FROM contracts WHERE id=? AND user_id=?', [$id, $u['id']]);
         flash('ok', 'Vertrag samt Zahlungen gelöscht.');
@@ -124,7 +124,7 @@ final class ContractController
 
     public function paymentStore(int $contractId): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         $this->own($u, $contractId);
         [$date, $data, $err] = $this->paymentInput();
         if ($err) {
@@ -138,7 +138,7 @@ final class ContractController
 
     public function paymentUpdate(int $id): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         $p = Repo::payment((int) $u['id'], $id) ?? abort(404);
         [$date, $data, $err] = $this->paymentInput();
         if ($err) {
@@ -152,7 +152,7 @@ final class ContractController
 
     public function paymentDelete(int $id): void
     {
-        $u = Auth::require();
+        $u = Auth::requireUser();
         $p = Repo::payment((int) $u['id'], $id) ?? abort(404);
         Db::exec('DELETE FROM payments WHERE id=?', [$id]);
         flash('ok', 'Zahlung gelöscht.');

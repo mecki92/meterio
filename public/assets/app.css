@@ -303,3 +303,17 @@ table .chip { padding: .15rem .5rem; font-size: .72rem; font-weight: 600; }
 
 /* Zähler-Statistik */
 .stat-months td, .stat-months th { padding: .35rem .6rem; }
+
+/* Benutzerverwaltung */
+.user-stat { background: var(--mb-soft); border-radius: .7rem; padding: .5rem .25rem; }
+.min-w-0 { min-width: 0; }
+
+/* Auswahlkarten: aktives Symbol invertiert */
+.btn-check:checked + .choice .icon-tile { background: var(--mb-primary); color: #fff; }
+[data-bs-theme="dark"] .btn-check:checked + .choice .icon-tile { color: #0b1220; }
+
+/* Kamera-Ansicht für Zählerfotos */
+.camlayer { position: fixed; inset: 0; z-index: 2000; background: #000; display: flex; flex-direction: column; }
+.camlayer[hidden] { display: none; }
+.camlayer video { flex: 1 1 auto; min-height: 0; width: 100%; object-fit: contain; background: #000; }
+.cambar { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: 1rem; padding-bottom: calc(1rem + env(safe-area-inset-bottom)); background: rgba(0,0,0,.85); }
