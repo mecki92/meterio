@@ -136,4 +136,106 @@ ul.codes code { display: block; text-align: center; font-size: 1.1rem; padding: 
 .thumbs img { width: 140px; height: 105px; object-fit: cover; border-radius: .5rem; display: block; }
 details > summary { cursor: pointer; }
 
-@media print { .site-nav, .site-footer, .no-print { display: none !important; } body { background: #fff; } }
+@media (max-width: 575.98px) { .kpi .k-val { font-size: 1.2rem; } .kpi-hero .k-val { font-size: 2rem; } }
+
+/* ---------- Chips (Status / Anlass) ---------- */
+.chip { white-space: nowrap; line-height: 1.2; }
+table .chip { padding: .15rem .5rem; font-size: .72rem; font-weight: 600; }
+.chip-ok, .chip-success { --c: var(--bs-success-rgb); }
+.chip-muted, .chip-secondary { --c: var(--bs-secondary-rgb); }
+.chip-info { --c: var(--bs-info-rgb); }
+.chip-primary { --c: var(--bs-primary-rgb); }
+.chip-warning { --c: var(--bs-warning-rgb); }
+.chip-danger { --c: var(--bs-danger-rgb); }
+.chip-dark { --c: var(--bs-emphasis-color-rgb); }
+.chip-ok, .chip-success, .chip-muted, .chip-secondary, .chip-info, .chip-primary, .chip-warning, .chip-danger, .chip-dark {
+  background: rgba(var(--c), .13); border-color: rgba(var(--c), .28); color: var(--bs-body-color);
+}
+.chip-ok, .chip-success { color: var(--bs-success-text-emphasis); }
+.chip-info { color: var(--bs-info-text-emphasis); }
+.chip-warning { color: var(--bs-warning-text-emphasis); }
+.chip-danger { color: var(--bs-danger-text-emphasis); }
+.chip-primary { color: var(--bs-primary-text-emphasis); }
+
+/* ---------- Vertragsansicht: Konditionen, Reiter, Zahlungen ---------- */
+.cond-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: .9rem 1.5rem; }
+.cond-grid dt { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--bs-secondary-color); font-weight: 600; }
+.cond-grid dd { margin: .1rem 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+#contract-tabs > .card-header { background: var(--mb-hover); border-radius: .9rem .9rem 0 0; padding: .6rem 1rem 0; border-bottom: 1px solid var(--mb-border) !important; }
+#contract-tabs .nav-tabs { border-bottom: 0; gap: .25rem; }
+#contract-tabs .nav-link { border: 0; border-bottom: 3px solid transparent; border-radius: .5rem .5rem 0 0; color: var(--bs-secondary-color); font-weight: 600; padding: .6rem 1rem; background: transparent; }
+#contract-tabs .nav-link:hover { color: var(--bs-body-color); }
+#contract-tabs .nav-link.active { color: var(--mb-primary); border-bottom-color: var(--mb-primary); background: var(--mb-surface); }
+.pay-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+.pay-stats > div, .settle-kpis > div { background: var(--mb-hover); border-radius: .7rem; padding: .65rem .9rem; display: flex; flex-direction: column; }
+.pay-stats span, .settle-kpis span { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--bs-secondary-color); font-weight: 600; }
+.pay-stats b, .settle-kpis b { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.pay-table { border: 1px solid var(--mb-border); border-radius: .7rem; }
+.pay-table .table > :not(caption) > * > * { padding: .6rem .8rem; }
+.pay-table thead th { background: var(--mb-hover); }
+.pay-form { background: var(--mb-hover); border-radius: .8rem; padding: 1rem; }
+@media (min-width: 992px) { .pay-form { position: sticky; top: 1rem; } }
+
+/* ---------- Abrechnung ---------- */
+.settle-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem; }
+.settle-kicker { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--mb-primary); font-weight: 700; }
+.settle-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; margin: 1rem 0 1.5rem; }
+.settle-kpis .is-plus { background: rgba(var(--bs-success-rgb), .14); }
+.settle-kpis .is-plus b { color: var(--mb-good); }
+.settle-kpis .is-minus { background: rgba(var(--bs-danger-rgb), .12); }
+.settle-kpis .is-minus b { color: var(--mb-bad); }
+@media (max-width: 575.98px) { .pay-stats, .settle-kpis { grid-template-columns: 1fr; } .pay-stats > div, .settle-kpis > div { flex-direction: row; justify-content: space-between; align-items: baseline; } }
+.settle-title { font-size: .95rem; font-weight: 700; margin: 1.5rem 0 .6rem; display: flex; align-items: center; gap: .5rem; }
+.settle-title i { color: var(--mb-primary); }
+.settle-sub { font-size: .85rem; margin-bottom: .35rem; color: var(--bs-secondary-color); }
+.settle-table { border: 1px solid var(--mb-border); border-radius: .7rem; }
+.settle-table .table > :not(caption) > * > * { padding: .5rem .8rem; background: transparent; }
+.settle-table thead th { background: var(--mb-hover); }
+.settle-table tfoot td { border-top: 1px solid var(--mb-border); font-variant-numeric: tabular-nums; }
+.settle-table tfoot tr:first-child td { border-top: 2px solid var(--mb-border); }
+.settle-table tfoot .sub td { color: var(--bs-secondary-color); }
+.settle-table tfoot .total td { font-weight: 700; background: var(--mb-hover); font-size: 1.02rem; }
+.settle-table tfoot .result td { font-weight: 700; font-size: 1.05rem; }
+.settle-table tfoot .result.plus td { background: rgba(var(--bs-success-rgb), .14); color: var(--mb-good); }
+.settle-table tfoot .result.minus td { background: rgba(var(--bs-danger-rgb), .12); color: var(--mb-bad); }
+.settle-table > .table > tfoot > tr:last-child td:first-child { border-bottom-left-radius: .65rem; }
+.settle-table > .table > tfoot > tr:last-child td:last-child { border-bottom-right-radius: .65rem; }
+
+/* ---------- Verbrauchs-Diagramm ---------- */
+.usage-stats { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .9rem; }
+.usage-stats .chip b { font-size: .8rem; background: transparent; padding: 0; color: var(--bs-body-color); }
+.usage-stats .chip.over { --c: var(--bs-warning-rgb); }
+.usage-stats .chip.under { --c: var(--bs-success-rgb); }
+.usage-stats .chip.over, .usage-stats .chip.under { background: rgba(var(--c), .14); border-color: rgba(var(--c), .35); }
+
+/* ---------- Ablesungen je Jahr gebündelt ---------- */
+.year-group + .year-group { margin-top: .75rem; }
+.year-head { width: 100%; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; padding: .7rem 1rem; border: 1px solid var(--mb-border); border-radius: .7rem; background: var(--mb-hover); color: var(--bs-body-color); text-align: left; cursor: pointer; }
+.year-head:hover { border-color: var(--mb-primary); }
+.year-head .yr-title { font-weight: 700; font-size: 1.05rem; display: inline-flex; align-items: center; gap: .55rem; }
+.year-head .yr-caret { transition: transform .15s; font-size: .8rem; color: var(--bs-secondary-color); }
+.year-head.collapsed .yr-caret { transform: rotate(-90deg); }
+.year-head .yr-meta { display: flex; flex-wrap: wrap; gap: .4rem; }
+.year-head .chip { background: var(--mb-surface); }
+.year-group .collapse > .pay-table, .year-group .collapsing > .pay-table { margin-top: .6rem; }
+
+/* ---------- Zähler-Formular ---------- */
+@media (min-width: 992px) { .side-sticky { position: sticky; top: 1rem; } }
+.choice { display: flex; gap: .85rem; align-items: flex-start; height: 100%; padding: .9rem 1rem; border: 1.5px solid var(--mb-border); border-radius: .8rem; cursor: pointer; background: var(--mb-surface); transition: border-color .12s, background .12s; }
+.choice:hover { border-color: var(--mb-primary); }
+.choice .icon-tile { width: 2.4rem; height: 2.4rem; font-size: 1.1rem; }
+.choice b { display: block; }
+.choice small { color: var(--bs-secondary-color); }
+.btn-check:checked + .choice { border-color: var(--mb-primary); background: var(--mb-soft); box-shadow: 0 0 0 .15rem rgba(var(--bs-primary-rgb), .15); }
+.btn-check:focus-visible + .choice { outline: 2px solid var(--mb-primary); outline-offset: 2px; }
+.regrow.reghead { margin-bottom: .25rem; }
+.regrow.reghead span { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; color: var(--bs-secondary-color); }
+@media (max-width: 767.98px) { .regrow.reghead { display: none; } }
+.regrow { padding: .6rem; border: 1px solid var(--mb-border); border-radius: .7rem; background: var(--mb-hover); }
+
+@media print {
+  .site-nav, .site-footer, .no-print, .nav-tabs, #pane-pay, details, .kpi, .kpi-hero { display: none !important; }
+  body { background: #fff; }
+  #contract-tabs .tab-pane#pane-settle { display: block !important; opacity: 1 !important; }
+  .card { box-shadow: none !important; border: 0 !important; }
+}

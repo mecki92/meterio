@@ -10,7 +10,7 @@ final class ReadingController
         $all = Repo::readings($meterId);
         view('readings/form', [
             'title' => 'Ablesung erfassen', 'active' => 'meters', 'meter' => $m, 'reading' => null,
-            'prev' => $all ? end($all) : null, 'form' => ['read_at' => input_dt(null), 'reason' => 'regular', 'note' => '', 'values' => []],
+            'prev' => $all ? end($all) : null, 'form' => ['read_at' => input_date(), 'reason' => 'regular', 'note' => '', 'values' => []],
         ]);
     }
 
@@ -43,7 +43,7 @@ final class ReadingController
         $m = Repo::meter((int) $u['id'], $r['meter_id']);
         view('readings/form', [
             'title' => 'Ablesung bearbeiten', 'active' => 'meters', 'meter' => $m, 'reading' => $r, 'prev' => null,
-            'form' => ['read_at' => input_dt($r['read_at']), 'reason' => $r['reason'], 'note' => $r['note'], 'values' => $r['values']],
+            'form' => ['read_at' => input_date($r['read_at']), 'reason' => $r['reason'], 'note' => $r['note'], 'values' => $r['values']],
         ]);
     }
 
@@ -142,19 +142,20 @@ final class ReadingController
         }
         view('readings/form', [
             'title' => $reading ? 'Ablesung bearbeiten' : 'Ablesung erfassen', 'active' => 'meters', 'meter' => $m, 'reading' => $reading, 'prev' => null,
-            'form' => ['read_at' => (string) ($_POST['read_at'] ?? input_dt(null)), 'reason' => $this->reason(), 'note' => (string) ($_POST['note'] ?? ''), 'values' => $vals, 'raw' => $_POST['val'] ?? [], 'force' => !empty($_POST['force'])],
+            'form' => ['read_at' => (string) ($_POST['read_at'] ?? input_date()), 'reason' => $this->reason(), 'note' => (string) ($_POST['note'] ?? ''), 'values' => $vals, 'raw' => $_POST['val'] ?? [], 'force' => !empty($_POST['force'])],
         ]);
     }
 
     /** @return array{0: ?string, 1: array, 2: string, 3: ?string} */
     private function input(array $m, ?int $ignoreReadingId): array
     {
-        $readAt = parse_dt((string) ($_POST['read_at'] ?? ''));
+        $day = parse_date((string) ($_POST['read_at'] ?? ''));
+        $readAt = $day ? $day . ' 00:00:00' : null;   // Ablesung gilt für den Tag (ohne Uhrzeit)
         $note = mb_trim_len((string) ($_POST['note'] ?? ''), 1000);
         if (!$readAt) {
-            return [null, [], $note, 'Bitte Datum und Uhrzeit der Ablesung angeben.'];
+            return [null, [], $note, 'Bitte das Datum der Ablesung angeben.'];
         }
-        if (strtotime($readAt) > time() + 300) {
+        if ($day > date('Y-m-d')) {
             return [null, [], $note, 'Das Ablesedatum liegt in der Zukunft.'];
         }
         $values = [];
@@ -190,11 +191,11 @@ final class ReadingController
                     }
                 }
                 if ($prev && $prev['values'][$regId] > $v) {
-                    return [null, [], $note, 'Plausibilität: „' . Repo::registerTitle($reg) . '“ ist niedriger als bei der Ablesung vom ' . date('d.m.Y H:i', $prev['ts'])
+                    return [null, [], $note, 'Plausibilität: „' . Repo::registerTitle($reg) . '“ ist niedriger als bei der Ablesung vom ' . date('d.m.Y', $prev['ts'])
                         . ' (' . nf($prev['values'][$regId], 0) . '). Bei Zählerwechsel bitte den Anlass „Zählerwechsel“ wählen oder „Trotzdem speichern“ ankreuzen.'];
                 }
                 if ($next && $next['reason'] !== 'meter_change' && $next['values'][$regId] < $v) {
-                    return [null, [], $note, 'Plausibilität: „' . Repo::registerTitle($reg) . '“ ist höher als bei der späteren Ablesung vom ' . date('d.m.Y H:i', $next['ts'])
+                    return [null, [], $note, 'Plausibilität: „' . Repo::registerTitle($reg) . '“ ist höher als bei der späteren Ablesung vom ' . date('d.m.Y', $next['ts'])
                         . ' (' . nf($next['values'][$regId], 0) . '). Bitte prüfen oder „Trotzdem speichern“ ankreuzen.'];
                 }
             }

@@ -54,9 +54,22 @@ final class ContractController
         if ($edit && $edit['contract_id'] !== $id) {
             $edit = null;
         }
+        $settlements = [];
+        $today = date('Y-m-d');
+        if ($m && $c['end_date'] && $c['end_date'] < $today) {   // nur abgeschlossene Verträge
+            $readings = Repo::readings($m['id']);
+            $series = Repo::series($readings);
+            $why = [];
+            foreach ($readings as $rd) {
+                $why[$rd['ts']] ??= $rd['reason'];
+            }
+            foreach (Calc::contractYears($c, time()) as $yr) {
+                $settlements[] = Calc::settlement($c, $m['registers'], $series, $payments, $yr, $why);
+            }
+        }
         view('contracts/show', [
             'title' => 'Vertrag ' . ($c['data']['provider'] ?: '#' . $id), 'active' => 'contracts', 'c' => $c, 'meter' => $m,
-            'payments' => $payments, 'sum' => $m ? $this->summary($c, $m) : null, 'edit' => $edit,
+            'payments' => $payments, 'sum' => $m ? $this->summary($c, $m) : null, 'edit' => $edit, 'settlements' => $settlements,
         ]);
     }
 
@@ -151,7 +164,7 @@ final class ContractController
         return ['id' => 0, 'meter_id' => $meterId, 'start_date' => date('Y-m-d'), 'end_date' => null, 'data' => [
             'provider' => '', 'contract_no' => '', 'base_fee' => null, 'base_period' => 'month', 'price_et' => null, 'price_ht' => null,
             'price_nt' => null, 'feedin' => null, 'annual_kwh' => null, 'monthly_advance' => null, 'note' => '',
-            'min_term_months' => null, 'credits' => []]];
+            'min_term_months' => null, 'credits' => [], 'price_basis' => 'gross', 'vat_rate' => 19.0]];
     }
 
     /** @return array{0: array, 1: ?string} */
@@ -167,9 +180,11 @@ final class ContractController
             'contract_no' => mb_trim_len((string) ($_POST['contract_no'] ?? ''), 60),
             'base_fee' => $num('base_fee'), 'base_period' => ($_POST['base_period'] ?? '') === 'year' ? 'year' : 'month',
             'price_et' => $num('price_et'), 'price_ht' => $num('price_ht'), 'price_nt' => $num('price_nt'), 'feedin' => $num('feedin'),
-            'annual_kwh' => $num('annual_kwh'), 'monthly_advance' => $num('monthly_advance'),
+            'annual_kwh' => parse_kwh($_POST['annual_kwh'] ?? ''), 'monthly_advance' => $num('monthly_advance'),
             'note' => mb_trim_len((string) ($_POST['note'] ?? ''), 1000),
             'min_term_months' => null, 'credits' => [],
+            'price_basis' => ($_POST['price_basis'] ?? '') === 'net' ? 'net' : 'gross',
+            'vat_rate' => in_array((string) ($_POST['vat_rate'] ?? ''), ['19', '7', '0'], true) ? (float) $_POST['vat_rate'] : 19.0,
         ];
         $mt = parse_num($_POST['min_term_months'] ?? '');
         $data['min_term_months'] = $mt !== null && $mt > 0 ? (int) round($mt) : null;

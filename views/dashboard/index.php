@@ -3,7 +3,7 @@
 ?>
 <div class="page-head">
     <div><h1>Dashboard</h1>
-        <?php if ($sel): ?><p class="sub"><?= e($sel['name']) ?><?= $last ? ' · Letzte Ablesung ' . e(date('d.m.Y H:i', $last['ts'])) : ' · noch keine Ablesung' ?></p><?php endif; ?></div>
+        <?php if ($sel): ?><p class="sub"><?= e($sel['name']) ?><?= $last ? ' · Letzte Ablesung ' . e(date('d.m.Y', $last['ts'])) : ' · noch keine Ablesung' ?></p><?php endif; ?></div>
     <?php if ($sel): ?>
     <div class="actions">
         <?php if (count($meters) > 1): ?>
@@ -48,17 +48,18 @@
                  data-contract="<?= (int) ($activeContract['id'] ?? 0) ?>"
                  data-years="<?= e(json_encode($activeContract ? ($years[$activeContract['id']] ?? []) : [])) ?>">
                 <div class="btn-group" role="group">
-                    <button type="button" data-range="year" class="btn btn-primary btn-sm">Jahr</button>
-                    <?php if ($activeContract): ?><button type="button" data-range="contract" class="btn btn-outline-primary btn-sm">Vertragsjahr</button><?php endif; ?>
+                    <?php if ($activeContract): ?><button type="button" data-range="contract" class="btn btn-primary btn-sm">Vertragsjahr</button><?php endif; ?>
+                    <button type="button" data-range="year" class="btn <?= $activeContract ? 'btn-outline-primary' : 'btn-primary' ?> btn-sm">Jahr</button>
                 </div>
-                <select id="refyear" class="form-select form-select-sm w-auto" aria-label="Jahr">
+                <select id="refyear" class="form-select form-select-sm w-auto" aria-label="Jahr"<?= $activeContract ? ' hidden' : '' ?>>
                     <?php for ($y = (int) date('Y'); $y >= (int) date('Y') - 6; $y--): ?><option value="<?= $y ?>"><?= $y ?></option><?php endfor; ?>
                 </select>
-                <select id="refcy" class="form-select form-select-sm w-auto" aria-label="Vertragsjahr" hidden></select>
+                <select id="refcy" class="form-select form-select-sm w-auto" aria-label="Vertragsjahr"<?= $activeContract ? '' : ' hidden' ?>></select>
             </div>
         </div>
         <div class="card-body">
-            <h3 id="usagetitle" class="h6 fw-normal text-body-secondary mb-3"></h3>
+            <h3 id="usagetitle" class="h6 fw-normal text-body-secondary mb-2"></h3>
+            <div class="usage-stats" id="usagestats"></div>
             <div class="chartbox"><canvas id="usageChart" aria-label="Verbrauchsdiagramm" role="img"></canvas></div>
             <p class="small text-body-secondary mt-2 mb-0" id="usageempty" hidden>Für diesen Zeitraum liegen noch keine Ablesedaten vor.</p>
         </div>

@@ -39,18 +39,19 @@
   var regs = $('#regs');
   if (regs) {
     var tariffs = JSON.parse(regs.getAttribute('data-tariffs'));
-    var kind = $('#kind'), analogBox = $('#analogbox'), digitalBox = $('#digitalbox'), errBox = $('#obiserr');
+    var kindRadios = $$('input[name="kind"]'), analogBox = $('#analogbox'), digitalBox = $('#digitalbox'), errBox = $('#obiserr');
     var idx = $$('.regrow', regs).length;
 
     var setDisabled = function (box, dis) {
       $$('input, select', box).forEach(function (el) { el.disabled = dis; });
     };
+    var kindValue = function () { var c = kindRadios.filter(function (r) { return r.checked; })[0]; return c ? c.value : 'digital'; };
     var syncKind = function () {
-      var analog = kind.value === 'analog';
+      var analog = kindValue() === 'analog';
       analogBox.hidden = !analog; digitalBox.hidden = analog;
       setDisabled(analogBox, !analog); setDisabled(digitalBox, analog);
     };
-    kind.addEventListener('change', syncKind);
+    kindRadios.forEach(function (r) { r.addEventListener('change', syncKind); });
     syncKind();
 
     var obisValues = function () {
@@ -111,7 +112,52 @@
       });
     });
     $('#meterform').addEventListener('submit', function (e) {
-      if (kind.value === 'digital' && !markDuplicates()) { e.preventDefault(); errBox.scrollIntoView({ block: 'center' }); }
+      if (kindValue() === 'digital' && !markDuplicates()) { e.preventDefault(); errBox.scrollIntoView({ block: 'center' }); }
+    });
+  }
+
+  /* ---------- Fotos: Kamera oder Galerie, mehrere Bilder sammeln ---------- */
+  var pick = document.getElementById('photopick');
+  if (pick) {
+    var inCam = $('#in-camera'), inFiles = $('#in-files'), thumbs = $('#newthumbs'), hint = $('#photohint');
+    var maxFiles = parseInt(pick.getAttribute('data-max'), 10) || 8, maxBytes = (parseInt(pick.getAttribute('data-maxmb'), 10) || 12) * 1048576;
+    var picked = [], urls = [];
+    var sync = function () {
+      var dt = new DataTransfer();
+      picked.forEach(function (f) { dt.items.add(f); });
+      inFiles.files = dt.files;
+      urls.forEach(function (u) { URL.revokeObjectURL(u); }); urls = [];
+      thumbs.innerHTML = '';
+      picked.forEach(function (f, i) {
+        var u = URL.createObjectURL(f); urls.push(u);
+        var fig = document.createElement('figure');
+        var img = document.createElement('img'); img.src = u; img.alt = 'Neues Foto ' + (i + 1);
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-outline-danger btn-sm mt-1 w-100';
+        b.innerHTML = '<i class="bi bi-x-lg"></i> Entfernen';
+        b.addEventListener('click', function () { picked.splice(i, 1); sync(); });
+        fig.appendChild(img); fig.appendChild(b); thumbs.appendChild(fig);
+      });
+    };
+    var add = function (list) {
+      var msg = '';
+      Array.prototype.forEach.call(list, function (f) {
+        if (f.type && f.type.indexOf('image/') !== 0) { msg = 'Nur Bilddateien sind erlaubt.'; return; }
+        if (f.size > maxBytes) { msg = '„' + f.name + '“ ist zu groß.'; return; }
+        if (picked.length >= maxFiles) { msg = 'Maximal ' + maxFiles + ' Fotos je Speichervorgang.'; return; }
+        picked.push(f);
+      });
+      sync();
+      if (msg) { hint.textContent = msg; hint.classList.add('text-danger'); } else { hint.classList.remove('text-danger'); }
+    };
+    $('#btn-camera').addEventListener('click', function () { inCam.click(); });
+    $('#btn-gallery').addEventListener('click', function () { inFiles.click(); });
+    inCam.addEventListener('change', function () { add(inCam.files); inCam.value = ''; });
+    inFiles.addEventListener('change', function () {
+      // native Auswahl ersetzt die Liste -> vorherige Fotos behalten und neue ergänzen
+      var chosen = Array.prototype.slice.call(inFiles.files);
+      var known = picked.slice();
+      var fresh = chosen.filter(function (f) { return known.indexOf(f) < 0; });
+      add(fresh);
     });
   }
 
@@ -189,6 +235,20 @@
     });
   }
 
+  /* Reiter (Vertragsansicht): Auswahl über #hash merken */
+  (function () {
+    var tabs = $$('#contract-tabs [data-bs-toggle="tab"]');
+    if (!tabs.length) { return; }
+    var map = { '#zahlungen': 'tab-pay', '#abrechnung': 'tab-settle' };
+    var want = map[location.hash];
+    if (want && window.bootstrap) { var el = document.getElementById(want); if (el) { new bootstrap.Tab(el).show(); } }
+    tabs.forEach(function (t) {
+      t.addEventListener('shown.bs.tab', function () {
+        if (history.replaceState) { history.replaceState(null, '', t.id === 'tab-settle' ? '#abrechnung' : '#zahlungen'); }
+      });
+    });
+  })();
+
   /* ---------- Dashboard-Diagramme ---------- */
   var usageCanvas = $('#usageChart');
   var costCanvas = $('#costChart');
@@ -221,11 +281,35 @@
   /* Verbrauch */
   var ctl = $('#usagectl');
   if (ctl) {
-    var state = { range: 'year' };
     var years = JSON.parse(ctl.getAttribute('data-years') || '[]');
+    var state = { range: ctl.querySelector('[data-range="contract"]') && years.length ? 'contract' : 'year' };
     var refYear = $('#refyear'), refCy = $('#refcy');
     years.forEach(function (y) { refCy.insertAdjacentHTML('beforeend', '<option value="' + y.index + '">' + y.label + '</option>'); });
     if (years.length) { refCy.value = years[years.length - 1].index; }
+    var nfmt = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
+    var TARIFF_NAME = { ET: 'Verbrauch', HT: 'Verbrauch HT', NT: 'Verbrauch NT', EXPORT: 'Einspeisung' };
+
+    /* Summenwerte über den Balken (ohne Zusatz-Bibliothek) */
+    var totalsPlugin = {
+      id: 'mbTotals',
+      afterDatasetsDraw: function (chart) {
+        var n = chart.data.labels.length, w = chart.chartArea.right - chart.chartArea.left;
+        if (w / n < 30) { return; }
+        var ctx = chart.ctx, y = chart.scales.y, meta = chart.getDatasetMeta(0);
+        ctx.save();
+        ctx.font = '600 ' + (w / n < 40 ? 10 : 11) + 'px system-ui, sans-serif';
+        ctx.fillStyle = textColor(); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        for (var i = 0; i < n; i++) {
+          var sum = 0, has = false;
+          chart.data.datasets.forEach(function (ds, di) {
+            if (ds.type === 'line' || ds.tariff === 'EXPORT' || !chart.isDatasetVisible(di)) { return; }
+            if (ds.data[i] != null) { sum += ds.data[i]; has = true; }
+          });
+          if (has && sum > 0 && meta.data[i]) { ctx.fillText(nfmt.format(sum), meta.data[i].x, y.getPixelForValue(sum) - 4); }
+        }
+        ctx.restore();
+      }
+    };
 
     var loadUsage = function () {
       var p = { type: 'usage', meter: ctl.getAttribute('data-meter'), range: state.range, contract: ctl.getAttribute('data-contract') };
@@ -234,10 +318,21 @@
       get(ctl.getAttribute('data-api'), p).then(function (d) {
         $('#usagetitle').textContent = d.title || '';
         var counters = {};
+        var single = d.datasets.length === 1;
         var sets = d.datasets.map(function (s) {
           var n = counters[s.tariff] = (counters[s.tariff] || 0) + 1;
           var c = COLORS[s.tariff] || COLORS.OTHER;
-          return { label: s.label, data: s.data, backgroundColor: withAlpha(c, SHADES[Math.min(n - 1, 2)]), borderRadius: 3, _any: s.any };
+          var a = SHADES[Math.min(n - 1, 2)];
+          var cur = d.current;
+          return {
+            label: single ? 'Verbrauch' : (TARIFF_NAME[s.tariff] || s.label) + (n > 1 ? ' (' + s.label + ')' : ''),
+            data: s.data, tariff: s.tariff, _any: s.any,
+            backgroundColor: function (ctx) { return withAlpha(c, ctx.dataIndex === cur ? a * 0.55 : a); },
+            borderColor: function (ctx) { return ctx.dataIndex === cur ? c : 'transparent'; },
+            borderWidth: function (ctx) { return ctx.dataIndex === cur ? 1.5 : 0; },
+            borderDash: [4, 3],
+            borderRadius: 6, borderSkipped: false, maxBarThickness: 46, categoryPercentage: 0.82, barPercentage: 0.9
+          };
         });
         if (d.target) {
           sets.push({ type: 'line', label: d.target_label, data: d.labels.map(function () { return d.target; }), borderColor: '#f59e0b', backgroundColor: '#f59e0b',
@@ -245,20 +340,57 @@
         }
         var any = sets.some(function (s) { return s._any; });
         $('#usageempty').hidden = any;
+
+        /* Kennzahlen: Summe, Durchschnitt, Abweichung vom Soll */
+        var total = 0, months = 0, sums = d.labels.map(function () { return null; });
+        d.datasets.forEach(function (s) {
+          if (s.tariff === 'EXPORT') { return; }
+          s.data.forEach(function (v, i) { if (v != null) { sums[i] = (sums[i] || 0) + v; } });
+        });
+        sums.forEach(function (v) { if (v != null) { total += v; months++; } });
+        var html = '';
+        if (months) {
+          html += '<span class="chip">Summe <b>' + nfmt.format(total) + ' kWh</b></span>';
+          html += '<span class="chip">Ø pro Monat <b>' + nfmt.format(total / months) + ' kWh</b></span>';
+          if (d.target) {
+            var diff = total - d.target * months, pct = d.target * months ? diff / (d.target * months) * 100 : 0;
+            html += '<span class="chip ' + (diff > 0 ? 'over' : 'under') + '">' + (diff > 0 ? 'über Soll' : 'unter Soll') + ' <b>' +
+              (diff > 0 ? '+' : '−') + nfmt.format(Math.abs(diff)) + ' kWh (' + (diff > 0 ? '+' : '−') + nfmt.format(Math.abs(pct)) + ' %)</b></span>';
+          }
+        }
+        $('#usagestats').innerHTML = html;
+
         if (usageChart) { usageChart.destroy(); }
         usageChart = new Chart(usageCanvas, {
           type: 'bar',
           data: { labels: d.labels, datasets: sets },
+          plugins: [totalsPlugin],
           options: {
             responsive: true, maintainAspectRatio: false,
+            layout: { padding: { top: 6 } },
             interaction: { mode: 'index', intersect: false },
             scales: {
-              x: { stacked: true, ticks: { color: textColor() }, grid: { display: false } },
-              y: { stacked: true, beginAtZero: true, title: { display: true, text: d.unit, color: textColor() }, ticks: { color: textColor(), callback: function (v) { return new Intl.NumberFormat('de-DE').format(v); } }, grid: { color: gridColor() } }
+              x: { stacked: true, ticks: { color: textColor(), maxRotation: 0, autoSkip: usageCanvas.clientWidth < 420, font: { size: usageCanvas.clientWidth < 520 ? 10 : 12 } }, grid: { display: false }, border: { display: false } },
+              y: { stacked: true, beginAtZero: true, grace: '10%', title: { display: true, text: d.unit, color: textColor() },
+                   ticks: { color: textColor(), maxTicksLimit: 6, callback: function (v) { return nfmt.format(v); } }, grid: { color: gridColor() }, border: { display: false } }
             },
             plugins: {
               legend: { position: 'bottom', labels: { color: textColor(), usePointStyle: true, boxWidth: 8, boxHeight: 8, padding: 16 } },
-              tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + fmt(c.parsed.y, d.unit); } } }
+              tooltip: {
+                callbacks: {
+                  label: function (c) { return c.dataset.label + ': ' + fmt(c.parsed.y, d.unit); },
+                  footer: function (items) {
+                    var i = items[0].dataIndex, out = [];
+                    if (sums[i] != null && d.datasets.length > 1) { out.push('Summe: ' + fmt(sums[i], d.unit)); }
+                    if (d.target && sums[i] != null) {
+                      var df = sums[i] - d.target;
+                      out.push('Soll: ' + fmt(d.target, d.unit) + ' (' + (df > 0 ? '+' : '−') + nfmt.format(Math.abs(df)) + ')');
+                    }
+                    if (i === d.current) { out.push('laufender Monat – bis zur letzten Ablesung'); }
+                    return out;
+                  }
+                }
+              }
             }
           }
         });

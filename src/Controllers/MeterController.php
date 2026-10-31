@@ -8,9 +8,9 @@ final class MeterController
         $u = Auth::require();
         $meters = Repo::meters((int) $u['id'], true);
         foreach ($meters as &$m) {
-            $last = Db::one('SELECT read_at FROM readings WHERE meter_id = ? ORDER BY read_at DESC LIMIT 1', [$m['id']]);
-            $m['last_read'] = $last['read_at'] ?? null;
+            $m['stats'] = Calc::meterStats($m, Repo::readings($m['id']));
         }
+        unset($m);
         view('meters/index', ['title' => 'Zähler', 'active' => 'meters', 'meters' => $meters]);
     }
 
@@ -51,8 +51,9 @@ final class MeterController
     {
         $u = Auth::require();
         $m = $this->own($u, $id);
-        $readings = array_reverse(Repo::readings($id));
-        view('meters/show', ['title' => $m['name'], 'active' => 'meters', 'meter' => $m, 'readings' => $readings]);
+        $asc = Repo::readings($id);
+        $stats = Calc::meterStats($m, $asc);
+        view('meters/show', ['title' => $m['name'], 'active' => 'meters', 'meter' => $m, 'readings' => array_reverse($asc), 'stats' => $stats]);
     }
 
     public function edit(int $id): void

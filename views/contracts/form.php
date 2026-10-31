@@ -2,7 +2,7 @@
 /** @var array $c @var array $meters */
 $d = $c['data'];
 $isNew = !$c['id'];
-$n = static fn($v) => $v === null ? '' : rtrim(rtrim(number_format((float) $v, 4, ',', ''), '0'), ',');
+$n = static fn($v) => $v === null ? '' : rtrim(rtrim(number_format((float) $v, 6, ',', ''), '0'), ',');
 ?>
 <h2 class="h3 mb-3"><?= $isNew ? 'Neuer Stromvertrag' : 'Vertrag bearbeiten' ?></h2>
 <form method="post" action="<?= e(url($isNew ? 'contracts' : 'contracts/' . $c['id'])) ?>" style="max-width:860px">
@@ -25,7 +25,20 @@ $n = static fn($v) => $v === null ? '' : rtrim(rtrim(number_format((float) $v, 4
         </div>
     </div></div>
 
-    <div class="card mb-3"><div class="card-header">Preise (brutto, inkl. MwSt.)</div><div class="card-body">
+    <div class="card mb-3"><div class="card-header">Preise</div><div class="card-body">
+        <div class="row g-3 mb-3">
+            <div class="col-7"><label class="form-label">Preise erfasst als</label>
+                <select name="price_basis" class="form-select">
+                    <option value="gross" <?= $d['price_basis'] === 'gross' ? 'selected' : '' ?>>Brutto (inkl. USt)</option>
+                    <option value="net" <?= $d['price_basis'] === 'net' ? 'selected' : '' ?>>Netto (zzgl. USt)</option>
+                </select></div>
+            <div class="col-5"><label class="form-label">Umsatzsteuer</label>
+                <select name="vat_rate" class="form-select">
+                    <?php foreach (['19' => '19 %', '7' => '7 %', '0' => '0 %'] as $v => $l): ?>
+                        <option value="<?= $v ?>" <?= (string) (int) $d['vat_rate'] === (string) $v ? 'selected' : '' ?>><?= e($l) ?></option>
+                    <?php endforeach; ?>
+                </select></div>
+        </div>
         <div class="row g-3 mb-3">
             <div class="col-8 col-md-6"><label class="form-label">Grundgebühr</label>
                 <div class="input-group"><input name="base_fee" class="form-control" inputmode="decimal" value="<?= e($n($d['base_fee'])) ?>" placeholder="z. B. 12,50"><span class="input-group-text">€</span></div></div>

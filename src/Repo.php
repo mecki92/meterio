@@ -116,7 +116,13 @@ final class Repo
         $d = Crypto::decJson($r['data_enc']);
         $d += ['provider' => '', 'contract_no' => '', 'base_fee' => 0.0, 'base_period' => 'month', 'price_et' => null, 'price_ht' => null,
                'price_nt' => null, 'feedin' => null, 'annual_kwh' => null, 'monthly_advance' => null, 'note' => '',
-               'min_term_months' => null, 'credits' => []];
+               'min_term_months' => null, 'credits' => [], 'price_basis' => 'gross', 'vat_rate' => 19.0];
+        foreach ($d['credits'] as &$cr) {   // Altformat: Vertragsjahr -> Monate
+            if (!isset($cr['months'])) {
+                $cr['months'] = max(1, (int) ($cr['year'] ?? 1)) * 12;
+            }
+        }
+        unset($cr);
         return ['id' => (int) $r['id'], 'user_id' => (int) $r['user_id'], 'meter_id' => (int) $r['meter_id'],
                 'start_date' => $r['start_date'], 'end_date' => $r['end_date'], 'data' => $d];
     }

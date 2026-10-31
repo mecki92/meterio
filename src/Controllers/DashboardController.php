@@ -139,8 +139,15 @@ final class DashboardController
             $target = round((float) $annual / 12, 1);
             $targetLabel = 'Soll-Ø laut Vertrag (' . nf((float) $annual, 0) . ' kWh/Jahr ≈ ' . nf($target, 0) . ' kWh/Monat)';
         }
+        $current = null;
+        $now = time();
+        foreach ($buckets as $i => [, $a, $b]) {
+            if ($a <= $now && $now < $b) {
+                $current = $i;
+            }
+        }
         return ['title' => $title, 'unit' => 'kWh', 'labels' => array_column($buckets, 0), 'datasets' => $datasets,
-                'target' => $target, 'target_label' => $targetLabel];
+                'target' => $target, 'target_label' => $targetLabel, 'current' => $current];
     }
 
     private function cost(array $u): array

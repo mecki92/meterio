@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 define('ROOT', dirname(__DIR__));
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.2.0';
 const APP_BRAND   = 'meterio by MeckByte';
 
 spl_autoload_register(static function (string $class): void {

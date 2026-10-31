@@ -28,7 +28,8 @@ function abs_url(string $path = ''): string
 
 function asset(string $path): string
 {
-    return url('assets/' . $path) . '?v=' . APP_VERSION;
+    $f = ROOT . '/public/assets/' . $path;   // Änderungszeit als Cache-Buster
+    return url('assets/' . $path) . '?v=' . APP_VERSION . '.' . (is_file($f) ? filemtime($f) : 0);
 }
 
 function redirect(string $path): never
@@ -139,6 +140,18 @@ function nf(?float $v, int $dec = 2): string
     return $v === null ? '–' : number_format($v, $dec, ',', '.');
 }
 
+/** Preis mit beliebig vielen Nachkommastellen (mind. 2, max. 6), z. B. 24,915966 oder 30,90. */
+function price(?float $v): string
+{
+    if ($v === null) {
+        return '–';
+    }
+    $s = number_format($v, 6, ',', '.');
+    $s = rtrim($s, '0');
+    $dec = strlen($s) - strpos($s, ',') - 1;
+    return $dec < 2 ? $s . str_repeat('0', 2 - $dec) : $s;
+}
+
 function eur(?float $v): string
 {
     return $v === null ? '–' : number_format($v, 2, ',', '.') . ' €';
@@ -183,6 +196,10 @@ function reading_reasons(): array
 {
     return [
         'regular'        => ['Reguläre Ablesung', 'secondary'],
+        'a4'             => ['A4 · Selbstablesung Kunde', 'primary', 'A4'],
+        'a2'             => ['A2 · Ablesung Messstellenbetreiber', 'info', 'A2'],
+        's1'             => ['S1 · Schätzung Lieferant', 'warning', 'S1'],
+        's2'             => ['S2 · Schätzung Messstellenbetreiber', 'warning', 'S2'],
         'contract_start' => ['Vertragsbeginn / Einzug', 'success'],
         'interim'        => ['Zwischenablesung', 'info'],
         'year_end'       => ['Jahresablesung (Ende Vertragsjahr)', 'primary'],
