@@ -65,7 +65,7 @@ final class Repo
         foreach ($rows as $r) {
             $id = (int) $r['id'];
             $out[] = [
-                'id' => $id, 'meter_id' => (int) $r['meter_id'], 'read_at' => $r['read_at'], 'ts' => strtotime($r['read_at']),
+                'id' => $id, 'meter_id' => (int) $r['meter_id'], 'read_at' => $r['read_at'], 'ts' => strtotime($r['read_at']), 'reason' => (string) ($r['reason'] ?? 'regular'),
                 'note' => (string) Crypto::dec($r['note_enc']), 'values' => $vBy[$id] ?? [], 'photos' => $pBy[$id] ?? [],
             ];
         }
@@ -115,7 +115,8 @@ final class Repo
     {
         $d = Crypto::decJson($r['data_enc']);
         $d += ['provider' => '', 'contract_no' => '', 'base_fee' => 0.0, 'base_period' => 'month', 'price_et' => null, 'price_ht' => null,
-               'price_nt' => null, 'feedin' => null, 'annual_kwh' => null, 'monthly_advance' => null, 'note' => ''];
+               'price_nt' => null, 'feedin' => null, 'annual_kwh' => null, 'monthly_advance' => null, 'note' => '',
+               'min_term_months' => null, 'credits' => []];
         return ['id' => (int) $r['id'], 'user_id' => (int) $r['user_id'], 'meter_id' => (int) $r['meter_id'],
                 'start_date' => $r['start_date'], 'end_date' => $r['end_date'], 'data' => $d];
     }

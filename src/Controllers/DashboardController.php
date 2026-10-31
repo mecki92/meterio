@@ -26,8 +26,9 @@ final class DashboardController
             $readings = Repo::readings($sel['id']);
             $series = Repo::series($readings);
             foreach (Repo::contracts((int) $u['id']) as $c) {
-                if ($c['meter_id'] !== $sel['id']) {
-                    continue;
+                $today = date('Y-m-d');
+                if ($c['meter_id'] !== $sel['id'] || $c['start_date'] > $today || ($c['end_date'] && $c['end_date'] < $today)) {
+                    continue;   // nur aktive Verträge
                 }
                 $cards[] = ['c' => $c, 'sum' => Calc::summary($c, $sel['registers'], $series, Repo::payments($c['id']))];
                 $years[$c['id']] = array_map(static fn($y) => ['index' => $y['index'], 'label' => $y['label']], Calc::contractYears($c, time()));
@@ -120,7 +121,26 @@ final class DashboardController
             }
             $datasets[] = ['label' => Repo::registerTitle($reg), 'tariff' => $reg['tariff'], 'data' => $data, 'any' => $any];
         }
-        return ['title' => $title, 'unit' => 'kWh', 'labels' => array_column($buckets, 0), 'datasets' => $datasets];
+        // Soll-Durchschnitt pro Monat aus dem vertraglichen Jahresverbrauch
+        $target = null;
+        $targetLabel = '';
+        $contract = Repo::contract((int) $u['id'], (int) ($_GET['contract'] ?? 0));
+        if (!$contract || $contract['meter_id'] !== $m['id']) {
+            $contract = null;
+            foreach (Repo::contracts((int) $u['id']) as $cc) {   // neuester Vertrag dieses Zählers
+                if ($cc['meter_id'] === $m['id']) {
+                    $contract = $cc;
+                    break;
+                }
+            }
+        }
+        $annual = $contract['data']['annual_kwh'] ?? null;
+        if ($annual && $range !== 'month') {
+            $target = round((float) $annual / 12, 1);
+            $targetLabel = 'Soll-Ø laut Vertrag (' . nf((float) $annual, 0) . ' kWh/Jahr ≈ ' . nf($target, 0) . ' kWh/Monat)';
+        }
+        return ['title' => $title, 'unit' => 'kWh', 'labels' => array_column($buckets, 0), 'datasets' => $datasets,
+                'target' => $target, 'target_label' => $targetLabel];
     }
 
     private function cost(array $u): array
@@ -163,7 +183,7 @@ final class DashboardController
         $advance = $c['data']['monthly_advance'] !== null ? (float) $c['data']['monthly_advance'] : null;
         foreach ($ts as $i => $t) {
             if ($sum['has_data'] && $t <= $sum['accrual_to']) {
-                $accrued[$i] = round(Calc::cost($c, $m['registers'], $series, $yr['start'], $t)['total'], 2);
+                $accrued[$i] = round(Calc::cost($c, $m['registers'], $series, $yr['start'], $t, $yr['index'])['total'], 2);
                 $anchorIdx = $i;
             } else {
                 $accrued[$i] = null;

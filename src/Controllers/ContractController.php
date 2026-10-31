@@ -150,7 +150,8 @@ final class ContractController
     {
         return ['id' => 0, 'meter_id' => $meterId, 'start_date' => date('Y-m-d'), 'end_date' => null, 'data' => [
             'provider' => '', 'contract_no' => '', 'base_fee' => null, 'base_period' => 'month', 'price_et' => null, 'price_ht' => null,
-            'price_nt' => null, 'feedin' => null, 'annual_kwh' => null, 'monthly_advance' => null, 'note' => '']];
+            'price_nt' => null, 'feedin' => null, 'annual_kwh' => null, 'monthly_advance' => null, 'note' => '',
+            'min_term_months' => null, 'credits' => []]];
     }
 
     /** @return array{0: array, 1: ?string} */
@@ -168,7 +169,28 @@ final class ContractController
             'price_et' => $num('price_et'), 'price_ht' => $num('price_ht'), 'price_nt' => $num('price_nt'), 'feedin' => $num('feedin'),
             'annual_kwh' => $num('annual_kwh'), 'monthly_advance' => $num('monthly_advance'),
             'note' => mb_trim_len((string) ($_POST['note'] ?? ''), 1000),
+            'min_term_months' => null, 'credits' => [],
         ];
+        $mt = parse_num($_POST['min_term_months'] ?? '');
+        $data['min_term_months'] = $mt !== null && $mt > 0 ? (int) round($mt) : null;
+        $creditErr = null;
+        foreach ((array) ($_POST['credit'] ?? []) as $cr) {
+            if (!is_array($cr)) {
+                continue;
+            }
+            $amt = parse_num($cr['amount'] ?? '');
+            $mo = (int) ($cr['months'] ?? 0);
+            $label = mb_trim_len((string) ($cr['label'] ?? ''), 80);
+            if ($amt === null && $label === '') {
+                continue; // leere Zeile
+            }
+            if ($amt === null || $amt <= 0 || $amt > 1000000 || $mo < 1 || $mo > 120) {
+                $creditErr = 'Gutschrift: bitte die Monate (1–120) und einen positiven Betrag angeben.';
+                continue;
+            }
+            $data['credits'][] = ['months' => $mo, 'amount' => $amt, 'label' => $label];
+        }
+        usort($data['credits'], static fn($a, $b) => $a['months'] <=> $b['months']);
         $row = ['meter_id' => $meterId, 'start_date' => $start ?? (string) ($_POST['start_date'] ?? ''), 'end_date' => $end, 'data' => $data];
 
         $err = null;
@@ -180,6 +202,10 @@ final class ContractController
             $err = 'Das Enddatum ist ungültig.';
         } elseif ($end && $end < $start) {
             $err = 'Das Enddatum liegt vor dem Startdatum.';
+        } elseif ($mt !== null && ($mt < 0 || $mt > 120)) {
+            $err = 'Die Mindestvertragslaufzeit muss zwischen 1 und 120 Monaten liegen.';
+        } elseif ($creditErr) {
+            $err = $creditErr;
         } else {
             foreach (['base_fee', 'price_et', 'price_ht', 'price_nt', 'feedin', 'annual_kwh', 'monthly_advance'] as $k) {
                 if ($data[$k] !== null && ($data[$k] < 0 || $data[$k] > 1000000)) {

@@ -1,12 +1,15 @@
-<div class="pagehead"><h2>Stromverträge</h2><a role="button" href="<?= e(url('contracts/new')) ?>">+ Neuer Vertrag</a></div>
-<?php if (!$rows): ?><article><p>Noch kein Vertrag hinterlegt. Mit Vertragsdaten und Abschlägen berechnet meterio Realkosten, Prognose und Nachzahlung.</p></article><?php endif; ?>
+<div class="page-head">
+    <div><h1>Stromverträge</h1><p class="sub"><?= count($rows) ?> Vertrag/Verträge</p></div>
+    <a class="btn btn-primary" href="<?= e(url('contracts/new')) ?>"><i class="bi bi-plus-lg"></i> Neuer Vertrag</a>
+</div>
+<?php if (!$rows): ?><div class="alert alert-info">Noch kein Vertrag hinterlegt. Mit Vertragsdaten und Abschlägen berechnet meterio Realkosten, Prognose und Nachzahlung.</div><?php endif; ?>
 <?php foreach ($rows as ['c' => $c, 'meter' => $m, 'sum' => $sum]): ?>
-<article>
-    <header>
-        <a href="<?= e(url('contracts/' . $c['id'])) ?>"><b><?= e($c['data']['provider'] ?: 'Vertrag #' . $c['id']) ?></b></a>
-        <span class="muted small"> · <?= e($m['name'] ?? '?') ?> · <?= e(fmt_date($c['start_date'])) ?> – <?= $c['end_date'] ? e(fmt_date($c['end_date'])) : 'unbefristet' ?></span>
-    </header>
-    <?php if ($sum) { $sum = $sum; require __DIR__ . '/_summary.php'; } ?>
-    <footer><a href="<?= e(url('contracts/' . $c['id'])) ?>">Details &amp; Zahlungen</a></footer>
-</article>
+<div class="card mb-3">
+    <div class="card-header split">
+        <a class="text-decoration-none" href="<?= e(url('contracts/' . $c['id'])) ?>"><i class="bi bi-file-earmark-text"></i> <?= e($c['data']['provider'] ?: 'Vertrag #' . $c['id']) ?></a>
+        <span class="small fw-normal text-body-secondary"><i class="bi bi-speedometer2"></i> <?= e($m['name'] ?? '?') ?> · <?= e(fmt_date($c['start_date'])) ?> – <?= $c['end_date'] ? e(fmt_date($c['end_date'])) : 'unbefristet' ?></span>
+    </div>
+    <div class="card-body"><?php if ($sum) { require __DIR__ . '/_summary.php'; } else { echo '<p class="mb-0 text-body-secondary">Kein Zähler zugeordnet.</p>'; } ?></div>
+    <div class="card-footer"><a class="text-decoration-none" href="<?= e(url('contracts/' . $c['id'])) ?>">Details &amp; Zahlungen <i class="bi bi-arrow-right"></i></a></div>
+</div>
 <?php endforeach; ?>

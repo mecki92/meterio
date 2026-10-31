@@ -16,8 +16,27 @@ final class Db
                 PDO::ATTR_EMULATE_PREPARES   => false,
             ]);
             self::$pdo->exec("SET time_zone = '" . date('P') . "'");
+            self::migrate(self::$pdo);
         }
         return self::$pdo;
+    }
+
+    /** Einfache Auto-Migration für bestehende Installationen (einmalig, Marker-Datei in storage/). */
+    private static function migrate(PDO $pdo): void
+    {
+        $marker = ROOT . '/storage/.migrated_reading_reason';
+        if (is_file($marker)) {
+            return;
+        }
+        try {
+            $has = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'readings' AND COLUMN_NAME = 'reason'")->fetchColumn();
+            if (!$has) {
+                $pdo->exec("ALTER TABLE readings ADD COLUMN reason VARCHAR(20) NOT NULL DEFAULT 'regular' AFTER read_at");
+            }
+            @file_put_contents($marker, date('c'));
+        } catch (Throwable $e) {
+            error_log('meterio migrate: ' . $e->getMessage());
+        }
     }
 
     public static function q(string $sql, array $params = []): PDOStatement

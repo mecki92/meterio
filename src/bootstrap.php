@@ -39,7 +39,7 @@ if (PHP_SAPI !== 'cli') {
     header('X-Frame-Options: DENY');
     header('Referrer-Policy: same-origin');
     header("Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; "
-        . "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; "
+        . "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob:; "
         . "font-src 'self' https://cdn.jsdelivr.net; frame-ancestors 'none'; form-action 'self'; base-uri 'self'");
     if ($https) {
         header('Strict-Transport-Security: max-age=31536000');

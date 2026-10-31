@@ -73,6 +73,28 @@ final class Calc
         return $out;
     }
 
+    /** Summe der einmaligen Gutschriften (z. B. Neukundenbonus) für ein Vertragsjahr (1 = erstes). */
+    public static function creditsFor(array $contract, int $yearIndex): float
+    {
+        $sum = 0.0;
+        foreach ($contract['data']['credits'] ?? [] as $cr) {
+            if ((int) $cr['year'] === $yearIndex) {
+                $sum += (float) $cr['amount'];
+            }
+        }
+        return $sum;
+    }
+
+    /** Frühestes Vertragsende laut Mindestvertragslaufzeit (letzter Tag) oder null. */
+    public static function minTermEnd(array $contract): ?DateTimeImmutable
+    {
+        $m = $contract['data']['min_term_months'] ?? null;
+        if (!$m) {
+            return null;
+        }
+        return (new DateTimeImmutable($contract['start_date']))->modify('+' . (int) $m . ' months')->modify('-1 day');
+    }
+
     /** Jahresgrundgebühr in €. */
     public static function baseFeeYear(array $d): float
     {
@@ -84,7 +106,7 @@ final class Calc
      * Kosten im Zeitraum.
      * @return array{kwh: array, regs: array, energy: float, credit: float, base: float, total: float}
      */
-    public static function cost(array $contract, array $registers, array $series, int $from, int $to): array
+    public static function cost(array $contract, array $registers, array $series, int $from, int $to, ?int $yearIndex = null): array
     {
         $d = $contract['data'];
         $kwh = ['ET' => 0.0, 'HT' => 0.0, 'NT' => 0.0, 'EXPORT' => 0.0];
@@ -103,8 +125,9 @@ final class Calc
         }
         $credit = $kwh['EXPORT'] * (float) ($d['feedin'] ?? 0) / 100;
         $base = $to > $from ? self::baseFeeYear($d) * (($to - $from) / 86400) / 365 : 0.0;
-        return ['kwh' => $kwh, 'regs' => $regs, 'energy' => $energy, 'credit' => $credit, 'base' => $base,
-                'total' => $energy + $base - $credit];
+        $bonus = $yearIndex !== null ? self::creditsFor($contract, $yearIndex) : 0.0;
+        return ['kwh' => $kwh, 'regs' => $regs, 'energy' => $energy, 'credit' => $credit, 'base' => $base, 'bonus' => $bonus,
+                'total' => $energy + $base - $credit - $bonus];
     }
 
     /**
@@ -160,7 +183,7 @@ final class Calc
             return $res;
         }
 
-        $c = self::cost($contract, $registers, $series, $yr['start'], $accrualTo);
+        $c = self::cost($contract, $registers, $series, $yr['start'], $accrualTo, $yr['index']);
         $res['cost'] = $c;
         $res['balance_now'] = $paid - $c['total'];
 
@@ -186,7 +209,7 @@ final class Calc
             }
             $credit = $fkwh['EXPORT'] * (float) ($d['feedin'] ?? 0) / 100;
             $base = self::baseFeeYear($d) * (($yr['end_ex'] - $yr['start']) / 86400) / 365;
-            $res['forecast_cost'] = $energy + $base - $credit;
+            $res['forecast_cost'] = $energy + $base - $credit - self::creditsFor($contract, $yr['index']);
             $res['forecast_kwh'] = $fkwh['ET'] + $fkwh['HT'] + $fkwh['NT'];
             $res['forecast_export_kwh'] = $fkwh['EXPORT'];
             $res['balance_forecast'] = $expectedPayments - $res['forecast_cost'];

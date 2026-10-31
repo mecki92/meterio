@@ -116,6 +116,24 @@ function parse_num(mixed $s): ?float
     return is_numeric($s) ? (float) $s : null;
 }
 
+/**
+ * kWh-Eingabe -> ganze kWh. Punkte sind Tausendertrenner ("12.345"), ein Komma beginnt Nachkommastellen (werden gerundet).
+ * Ein einzelner Punkt mit != 3 Folgeziffern ("12345.6") gilt als Dezimalpunkt.
+ */
+function parse_kwh(mixed $s): ?float
+{
+    $s = trim(str_replace([' ', "\u{00A0}", "'"], '', (string) $s));
+    if ($s === '') {
+        return null;
+    }
+    if (str_contains($s, ',')) {
+        $s = str_replace(['.', ','], ['', '.'], $s);
+    } elseif (preg_match('/^\d{1,3}(\.\d{3})+$/', $s)) {
+        $s = str_replace('.', '', $s);
+    }
+    return is_numeric($s) ? round((float) $s) : null;
+}
+
 function nf(?float $v, int $dec = 2): string
 {
     return $v === null ? '–' : number_format($v, $dec, ',', '.');
@@ -141,6 +159,13 @@ function input_dt(?string $mysql): string
     return date('Y-m-d\TH:i', $t ?: time());
 }
 
+/** Datum für <input type="date"> (heute, wenn leer). */
+function input_date(?string $mysql = null): string
+{
+    $t = $mysql ? strtotime($mysql) : time();
+    return date('Y-m-d', $t ?: time());
+}
+
 function parse_dt(string $s): ?string
 {
     $d = DateTime::createFromFormat('Y-m-d\TH:i', $s) ?: DateTime::createFromFormat('Y-m-d H:i', $s);
@@ -151,6 +176,24 @@ function parse_date(string $s): ?string
 {
     $d = DateTime::createFromFormat('!Y-m-d', $s);
     return ($d && $d->format('Y-m-d') === $s) ? $s : null;
+}
+
+/** Anlass einer Ablesung: key => [Label, Badge-Farbe]. */
+function reading_reasons(): array
+{
+    return [
+        'regular'        => ['Reguläre Ablesung', 'secondary'],
+        'contract_start' => ['Vertragsbeginn / Einzug', 'success'],
+        'interim'        => ['Zwischenablesung', 'info'],
+        'year_end'       => ['Jahresablesung (Ende Vertragsjahr)', 'primary'],
+        'contract_end'   => ['Vertragsende / Auszug', 'dark'],
+        'provider_change' => ['Anbieterwechsel', 'warning'],
+        'price_change'   => ['Preisänderung', 'warning'],
+        'meter_change'   => ['Zählerwechsel', 'danger'],
+        'grid_operator'  => ['Ablesung durch Netzbetreiber', 'info'],
+        'estimated'      => ['Schätzwert', 'secondary'],
+        'other'          => ['Sonstiges', 'secondary'],
+    ];
 }
 
 function tariff_labels(): array

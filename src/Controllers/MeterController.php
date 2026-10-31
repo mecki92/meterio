@@ -18,7 +18,7 @@ final class MeterController
     {
         Auth::require();
         view('meters/form', [
-            'title' => 'Neuer Zähler', 'active' => 'meters', 'meter' => ['id' => 0, 'name' => '', 'location' => '', 'note' => '', 'kind' => 'digital', 'archived' => 0,
+            'title' => 'Neuer Zähler', 'active' => 'meters', 'meter' => ['id' => 0, 'name' => '', 'location' => '', 'note' => '', 'kind' => 'digital', 'archived' => 0, 'tariff_model' => 'single',
                 'registers' => [['id' => 0, 'obis' => '1.8.0', 'label' => 'Bezug', 'tariff' => 'ET']]],
         ]);
     }
@@ -26,7 +26,7 @@ final class MeterController
     public function store(): void
     {
         $u = Auth::require();
-        [$data, $regs, $err] = $this->input();
+        [$data, $regs, $err] = $this->input([]);
         if ($err) {
             flash('error', $err);
             view('meters/form', ['title' => 'Neuer Zähler', 'active' => 'meters', 'meter' => $data + ['id' => 0, 'registers' => $regs]]);
@@ -58,14 +58,16 @@ final class MeterController
     public function edit(int $id): void
     {
         $u = Auth::require();
-        view('meters/form', ['title' => 'Zähler bearbeiten', 'active' => 'meters', 'meter' => $this->own($u, $id)]);
+        $m = $this->own($u, $id);
+        $m['tariff_model'] = $this->modelOf($m['registers']);
+        view('meters/form', ['title' => 'Zähler bearbeiten', 'active' => 'meters', 'meter' => $m]);
     }
 
     public function update(int $id): void
     {
         $u = Auth::require();
-        $this->own($u, $id);
-        [$data, $regs, $err] = $this->input();
+        $existing = $this->own($u, $id);
+        [$data, $regs, $err] = $this->input($existing['registers']);
         if ($err) {
             flash('error', $err);
             view('meters/form', ['title' => 'Zähler bearbeiten', 'active' => 'meters', 'meter' => $data + ['id' => $id, 'registers' => $regs]]);
@@ -113,8 +115,23 @@ final class MeterController
         return $m;
     }
 
-    /** @return array{0: array, 1: array, 2: ?string} */
-    private function input(): array
+    private function modelOf(array $registers): string
+    {
+        foreach ($registers as $r) {
+            if (in_array($r['tariff'], ['HT', 'NT'], true)) {
+                return 'multi';
+            }
+        }
+        return 'single';
+    }
+
+    /**
+     * Analog: Register ergeben sich aus der Tarifwahl (Eintarif / HT+NT), ohne OBIS.
+     * Digital: freie OBIS-Register, jede Kennzahl genau einmal.
+     * @param array $existing bisherige Register (zur Wiederverwendung der IDs beim Bearbeiten)
+     * @return array{0: array, 1: array, 2: ?string}
+     */
+    private function input(array $existing): array
     {
         $data = [
             'name' => mb_trim_len((string) ($_POST['name'] ?? ''), 120),
@@ -124,27 +141,57 @@ final class MeterController
             'archived' => empty($_POST['archived']) ? 0 : 1,
         ];
         $regs = [];
-        $tariffs = array_keys(tariff_labels());
-        foreach ((array) ($_POST['reg'] ?? []) as $r) {
-            $label = mb_trim_len((string) ($r['label'] ?? ''), 80);
-            $obis = mb_trim_len((string) ($r['obis'] ?? ''), 30);
-            if ($label === '' && $obis === '') {
-                continue;
-            }
-            $regs[] = ['id' => (int) ($r['id'] ?? 0), 'obis' => $obis, 'label' => $label !== '' ? $label : $obis,
-                       'tariff' => in_array($r['tariff'] ?? '', $tariffs, true) ? $r['tariff'] : 'ET'];
-        }
         $err = null;
+
+        if ($data['kind'] === 'analog') {
+            $model = ($_POST['tariff_model'] ?? '') === 'multi' ? 'multi' : 'single';
+            $data['tariff_model'] = $model;
+            $spec = $model === 'multi'
+                ? [['HT', 'Hochtarif (HT)'], ['NT', 'Niedertarif (NT)']]
+                : [['ET', 'Zählerstand']];
+            foreach ($spec as [$tariff, $label]) {
+                $id = 0;
+                foreach ($existing as $e) {
+                    if ($e['tariff'] === $tariff) {
+                        $id = $e['id'];
+                        break;
+                    }
+                }
+                $regs[] = ['id' => $id, 'obis' => '', 'label' => $label, 'tariff' => $tariff];
+            }
+        } else {
+            $tariffs = array_keys(tariff_labels());
+            $seen = [];
+            foreach ((array) ($_POST['reg'] ?? []) as $r) {
+                $label = mb_trim_len((string) ($r['label'] ?? ''), 80);
+                $obis = mb_trim_len((string) ($r['obis'] ?? ''), 30);
+                if ($label === '' && $obis === '') {
+                    continue;
+                }
+                $regs[] = ['id' => (int) ($r['id'] ?? 0), 'obis' => $obis, 'label' => $label !== '' ? $label : $obis,
+                           'tariff' => in_array($r['tariff'] ?? '', $tariffs, true) ? $r['tariff'] : 'ET'];
+            }
+            foreach ($regs as $r) {
+                $key = mb_strtolower($r['obis']);
+                if ($r['obis'] === '') {
+                    $err = 'Bei digitalen Zählern ist für jedes Register eine OBIS-Kennzahl erforderlich (z. B. 1.8.0).';
+                } elseif (!preg_match('/^[0-9A-Za-z.\-:*&()]{1,30}$/', $r['obis'])) {
+                    $err = 'Ungültige OBIS-Kennzahl: ' . $r['obis'];
+                } elseif (isset($seen[$key])) {
+                    $err = 'Die OBIS-Kennzahl „' . $r['obis'] . '“ ist mehrfach vorhanden – jede Kennzahl darf nur einmal vorkommen.';
+                }
+                $seen[$key] = true;
+                if ($err) {
+                    break;
+                }
+            }
+            $data['tariff_model'] = 'single';
+        }
+
         if ($data['name'] === '') {
             $err = 'Bitte einen Namen für den Zähler angeben.';
         } elseif (!$regs) {
             $err = 'Mindestens ein Register ist erforderlich.';
-        } else {
-            foreach ($regs as $r) {
-                if ($r['obis'] !== '' && !preg_match('/^[0-9A-Za-z.\-:*&()]{1,30}$/', $r['obis'])) {
-                    $err = 'Ungültige OBIS-Kennzahl: ' . $r['obis'];
-                }
-            }
         }
         return [$data, $regs, $err];
     }

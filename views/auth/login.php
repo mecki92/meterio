@@ -1,15 +1,15 @@
-<article class="authcard">
-    <header class="authhead"><div class="bolt big">⚡</div><h1>meterio</h1><p>by MeckByte</p></header>
-    <form method="post" action="<?= e(url('login')) ?>" autocomplete="on">
-        <?= csrf_field() ?>
-        <label>E-Mail
-            <input type="email" name="email" value="<?= e($email) ?>" autocomplete="username" required autofocus>
-        </label>
-        <label>Passwort
-            <input type="password" name="password" autocomplete="current-password" required>
-        </label>
-        <button type="submit">Anmelden</button>
-    </form>
-    <p class="center"><a href="<?= e(url('forgot')) ?>">Passwort vergessen?</a></p>
-    <p class="muted center small">Nach dem Passwort folgt ein Zwei-Faktor-Code.</p>
-</article>
+<div class="card mt-4">
+    <?php $heading = 'meterio'; require __DIR__ . '/_head.php'; ?>
+    <div class="card-body">
+        <form method="post" action="<?= e(url('login')) ?>" autocomplete="on">
+            <?= csrf_field() ?>
+            <div class="mb-3"><label class="form-label">E-Mail</label>
+                <input type="email" name="email" class="form-control" value="<?= e($email) ?>" autocomplete="username" required autofocus></div>
+            <div class="mb-3"><label class="form-label">Passwort</label>
+                <input type="password" name="password" class="form-control" autocomplete="current-password" required></div>
+            <button type="submit" class="btn btn-primary w-100">Anmelden</button>
+        </form>
+        <p class="text-center mt-3 mb-1"><a href="<?= e(url('forgot')) ?>">Passwort vergessen?</a></p>
+        <p class="text-center text-body-secondary small mb-0">Nach dem Passwort folgt ein Zwei-Faktor-Code.</p>
+    </div>
+</div>

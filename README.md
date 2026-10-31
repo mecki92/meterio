@@ -2,7 +2,7 @@
 
 Webapplikation zur Verwaltung von Stromverbräuchen für Haushalte, Vermieter und WGs: Zählerstände (analog/digital, HT/NT, OBIS-Register) mit Foto-Beleg erfassen, Stromverträge und Abschläge pflegen und Realkosten gegen Abschläge in Echtzeit überwachen – inkl. Prognose bis zum Ende des Vertragsjahres.
 
-**Stack:** PHP 8.x · MySQL/MariaDB · Vanilla JS · Pico.css & Chart.js via CDN · kein Node, kein npm, kein Composer, keine Build-Tools.
+**Stack:** PHP 8.x · MySQL/MariaDB · Vanilla JS · Bootstrap 5 (+ Icons) & Chart.js via CDN · kein Node, kein npm, kein Composer, keine Build-Tools.
 **Ziel:** netcup Webhosting 4000 (Shared Hosting, ohne Root/Docker) – Upload per FTP/SFTP genügt.
 
 ## Funktionen
@@ -10,9 +10,9 @@ Webapplikation zur Verwaltung von Stromverbräuchen für Haushalte, Vermieter un
 - **Rollen:** Admin (Benutzer anlegen/deaktivieren/löschen, 2FA & Passwort zurücksetzen) und Standard-User (nur eigene Daten).
 - **2FA verpflichtend:** TOTP (Google Authenticator, 1Password, Bitwarden …, QR-Einrichtung) oder 6-stelliger E-Mail-Code, Wahl im Profil; 10 Backup-Codes (einmalig sichtbar, einmal nutzbar); Replay-Schutz und Fehlversuch-Sperre.
 - **Verschlüsselung:** Zählerstände, Zähler-/Registerbezeichnungen, Vertragsdaten, Zahlungen, Notizen und die Foto-Dateien werden vor dem Speichern mit **AES-256-GCM** (`openssl_encrypt`) verschlüsselt. Der Schlüssel liegt nur in `config.php` außerhalb des Webroots.
-- **Zähler & Register:** freie OBIS-Register pro Zähler (z. B. 1.8.0 / 1.8.1 HT / 1.8.2 NT / 2.8.0 Einspeisung) mit selbst vergebener Bedeutung und Abrechnungs-Zuordnung.
-- **Ablesungen:** Datum/Uhrzeit, Werte je Register, Plausibilitätsprüfung, mehrere Fotos (serverseitig per GD skaliert auf max. 1600 px und als JPEG komprimiert, EXIF-Drehung berücksichtigt).
-- **Verträge & Zahlungen:** Laufzeit, Grundgebühr (€/Monat oder €/Jahr), Arbeitspreise ET/HT/NT, Einspeisevergütung, Jahresverbrauch, Monatsabschlag; Zahlungen mit Datum, Betrag, Art, Status.
+- **Zähler & Register:** *Analoge* Zähler: nur Eintarif oder HT/NT, ohne OBIS. *Digitale* Zähler: freie OBIS-Register (z. B. 1.8.0 / 1.8.1 HT / 1.8.2 NT / 2.8.0 Einspeisung) mit selbst vergebener Bedeutung und Abrechnungs-Zuordnung; jede OBIS-Kennzahl ist pro Zähler nur einmal erlaubt (Prüfung im Formular und auf dem Server).
+- **Ablesungen:** Datum/Uhrzeit, Anlass (Vertragsbeginn/Einzug, Zwischenablesung, Jahresablesung, Vertragsende/Auszug, Anbieterwechsel, Preisänderung, Zählerwechsel, Netzbetreiber, Schätzwert, Sonstiges), Werte je Register, Plausibilitätsprüfung, mehrere Fotos (serverseitig per GD skaliert auf max. 1600 px und als JPEG komprimiert, EXIF-Drehung berücksichtigt).
+- **Verträge & Zahlungen:** Laufzeit, Mindestvertragslaufzeit (zeigt das frühestmögliche Vertragsende), einmalige Gutschriften pro Vertragsjahr (z. B. Neukundenbonus, mindern die Kosten des jeweiligen Jahres und fließen in Prognose und Soll-Ist ein), Grundgebühr (€/Monat oder €/Jahr), Arbeitspreise ET/HT/NT, Einspeisevergütung, Jahresverbrauch, Monatsabschlag; Zahlungen mit Datum, Betrag, Art, Status.
 - **Dashboard:** Verbrauch pro Monat/Jahr/Vertragsjahr (Chart.js), Soll-Ist-Vergleich, Hochrechnung der Jahreskosten und voraussichtliches Guthaben bzw. Nachzahlung.
 - **E-Mail:** eigener SMTP-Client (netcup), Branding in allen System-Mails, Passwort-vergessen-Link (1 h gültig), Einladungs-Link, Ablese-Erinnerungen per `cron.php`.
 
