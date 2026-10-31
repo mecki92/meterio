@@ -63,7 +63,7 @@ final class AuthController
         $pw = (string) ($_POST['password'] ?? '');
 
         if (Auth::tooMany('login', $email)) {
-            flash('error', 'Zu viele Fehlversuche. Bitte in ' . 15 . ' Minuten erneut versuchen.');
+            flash('error', 'Zu viele Fehlversuche. Bitte später erneut versuchen.');
             view('auth/login', ['title' => 'Anmelden', 'bare' => true, 'email' => $email]);
             return;
         }
@@ -214,7 +214,7 @@ final class AuthController
                 Auth::sendResetMail($user);
             }
         }
-        flash('ok', 'Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde ein Link zum Zurücksetzen gesendet (1 Stunde gültig).');
+        flash('ok', 'Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde ein Link zum Zurücksetzen gesendet.');
         redirect('login');
     }
 

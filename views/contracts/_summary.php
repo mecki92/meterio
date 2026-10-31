@@ -23,9 +23,9 @@ if ($startTs > time()):   // Vertrag liegt in der Zukunft
         <div class="row g-3 row-cols-2 row-cols-md-3">
             <div class="col"><div class="kpi"><div class="k-label"><i class="bi bi-calendar-range"></i> Laufzeit</div>
                 <div class="k-val fs-5"><?= e(fmt_date($c['start_date'])) ?></div><div class="k-sub">bis <?= $c['end_date'] ? e(fmt_date($c['end_date'])) : 'unbefristet' ?></div></div></div>
-            <?php if ($dd['monthly_advance'] !== null): ?>
+            <?php $advNow = Calc::advanceAt($c, min(time(), $c['end_date'] ? strtotime($c['end_date']) : time())); if ($advNow !== null): ?>
                 <div class="col"><div class="kpi"><div class="k-label"><i class="bi bi-wallet2"></i> Monatlicher Abschlag</div>
-                    <div class="k-val"><?= e(eur((float) $dd['monthly_advance'])) ?></div><div class="k-sub"><?= (int) $sum['paid_count'] > 0 ? (int) $sum['paid_count'] . ' Zahlung(en) erfasst' : 'noch keine Zahlung erfasst' ?></div></div></div>
+                    <div class="k-val"><?= e(eur($advNow)) ?></div><div class="k-sub"><?= (int) $sum['paid_count'] > 0 ? (int) $sum['paid_count'] . ' Zahlung(en) erfasst' : 'noch keine Zahlung erfasst' ?></div></div></div>
             <?php endif; ?>
             <?php if ($dd['annual_kwh'] !== null): ?>
                 <div class="col"><div class="kpi"><div class="k-label"><i class="bi bi-bar-chart"></i> Jahresverbrauch</div>
@@ -46,18 +46,20 @@ $span = max(1, $yr['end_ex'] - $yr['start']);
 $pct = (int) round(max(0, min(100, (time() - $yr['start']) / $span * 100)));
 $daysLeft = max(0, (int) ceil(($yr['end_ex'] - time()) / 86400));
 $k = $sum['cost'] ? $sum['cost']['kwh'] : null;
-$done = $c['end_date'] && $c['end_date'] < date('Y-m-d');   // abgeschlossen: abgerechnet statt Prognose
+$periodDone = $periodDone ?? null;   // true = abgeschlossener (früherer) Abrechnungszeitraum eines laufenden Vertrags
+$done = $periodDone === true || ($c['end_date'] && $c['end_date'] < date('Y-m-d'));   // abgeschlossen: abgerechnet statt Prognose
+$doneTs = $periodDone === true ? $yr['end_ex'] - 86400 : ($c['end_date'] ? strtotime($c['end_date']) : time());
 
 if ($done && $sum['balance_now'] !== null) {
     $heroCls = $sum['balance_now'] >= 0 ? 'good' : 'bad';
     $heroLabel = $sum['balance_now'] >= 0 ? 'Guthaben aus Abrechnung' : 'Nachzahlung laut Abrechnung';
     $heroVal = eur(abs($sum['balance_now']));
-    $heroSub = 'Vertrag beendet am ' . fmt_date($c['end_date']) . ' – abgerechnet';
+    $heroSub = ($periodDone === true ? 'Zeitraum beendet am ' : 'Vertrag beendet am ') . date('d.m.Y', $doneTs) . ' – abgerechnet';
 } elseif ($bal !== null) {
     $heroCls = $bal >= 0 ? 'good' : 'bad';
     $heroLabel = $bal >= 0 ? 'Voraussichtliches Guthaben' : 'Voraussichtliche Nachzahlung';
     $heroVal = eur(abs($bal));
-    $heroSub = 'Prognose zum Ende des Vertragsjahres, nach Abschlägen';
+    $heroSub = 'Prognose zum Ende des ' . (Calc::isYearly($c) ? 'Vertragsjahres' : 'Abrechnungszeitraums') . ', nach Abschlägen';
 } elseif ($sum['balance_now'] !== null) {
     $heroCls = $sum['balance_now'] >= 0 ? 'good' : 'bad';
     $heroLabel = 'Soll-Ist aktuell';
@@ -79,8 +81,8 @@ if ($done && $sum['balance_now'] !== null) {
                 <div class="k-sub"><?= e($heroSub) ?></div>
             </div>
             <div class="yr">
-                <div class="d-flex justify-content-between"><span><?= (int) $yr['index'] ?>. Vertragsjahr</span><span><?= $done ? 'abgeschlossen' : $pct . ' %' ?></span></div>
-                <div class="progress" role="progressbar" aria-label="Fortschritt Vertragsjahr" aria-valuenow="<?= $pct ?>" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width: <?= $pct ?>%"></div></div>
+                <div class="d-flex justify-content-between"><span><?= (int) $yr['index'] ?>. <?= e(period_word($c)) ?></span><span><?= $done ? 'abgeschlossen' : $pct . ' %' ?></span></div>
+                <div class="progress" role="progressbar" aria-label="Fortschritt" aria-valuenow="<?= $pct ?>" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width: <?= $pct ?>%"></div></div>
                 <div class="opacity-75"><?= e($yr['label']) ?><?= $daysLeft > 0 ? ' · noch ' . $daysLeft . ' Tage' : '' ?></div>
             </div>
         </div>
@@ -94,22 +96,22 @@ if ($done && $sum['balance_now'] !== null) {
             <?php if ($sum['cost']): ?>
                 <div class="col"><div class="kpi"><div class="k-label"><i class="bi bi-receipt"></i> <?= $done ? 'Energiekosten (abgerechnet)' : 'Realkosten bisher' ?></div>
                     <div class="k-val"><?= e(eur($sum['cost']['total'])) ?></div>
-                    <div class="k-sub"><?= $done ? 'bis' : 'Stand' ?> <?= e(date('d.m.Y', $done ? strtotime($c['end_date']) : $sum['accrual_to'])) ?><?= $sum['cost']['bonus'] > 0 ? ' · inkl. −' . e(eur($sum['cost']['bonus'])) . ' Gutschrift' : '' ?>
-                    <?php foreach ($sum['credits_pending'] as $cp): ?><br><i class="bi bi-hourglass-split"></i> Gutschrift −<?= e(eur($cp['amount'])) ?> ab <?= e(date('d.m.Y', $cp['ts'])) ?><?php endforeach; ?></div></div></div>
+                    <div class="k-sub"><?= $done ? 'bis' : 'Stand' ?> <?= e(date('d.m.Y', $done ? $doneTs : $sum['accrual_to'])) ?></div></div></div>
             <?php endif; ?>
             <div class="col"><div class="kpi"><div class="k-label"><i class="bi bi-wallet2"></i> Abschläge bezahlt</div>
-                <div class="k-val"><?= e(eur($sum['paid'])) ?></div><div class="k-sub"><?= (int) $sum['paid_count'] ?> Zahlung(en)</div></div></div>
+                <div class="k-val"><?= e(eur($sum['paid'])) ?></div><div class="k-sub"><?= (int) $sum['paid_count'] ?> Zahlung(en)<?= $sum['bonus_received'] > 0 ? ' · + Bonus ' . e(eur($sum['bonus_received'])) : '' ?>
+                    <?php foreach ($sum['credits_pending'] as $cp): ?><br><i class="bi bi-hourglass-split"></i> Bonus <?= e(eur($cp['amount'])) ?> am <?= e(date('d.m.Y', $cp['ts'])) ?> erwartet<?php endforeach; ?></div></div></div>
             <?php if ($k): ?>
                 <div class="col"><div class="kpi"><div class="k-label"><i class="bi bi-lightning-charge"></i> <?= $done ? 'Verbrauch gesamt' : 'Verbrauch bisher' ?></div>
                     <div class="k-val"><?= e(nf($k['ET'] + $k['HT'] + $k['NT'], 0)) ?> kWh</div>
-                    <div class="k-sub"><?= $k['EXPORT'] > 0 ? 'Einspeisung ' . e(nf($k['EXPORT'], 0)) . ' kWh' : ($done ? ($sum['annual_kwh'] ? 'Vertrag: ' . e(nf($sum['annual_kwh'], 0)) . ' kWh' : 'im Vertragsjahr') : 'seit Beginn des Vertragsjahres') ?></div></div></div>
+                    <div class="k-sub"><?= $k['EXPORT'] > 0 ? 'Einspeisung ' . e(nf($k['EXPORT'], 0)) . ' kWh' : ($done ? ($sum['annual_kwh'] ? 'Vertrag: ' . e(nf($sum['annual_kwh'], 0)) . ' kWh' : ('im ' . period_word($c))) : 'seit Beginn des ' . (Calc::isYearly($c) ? 'Vertragsjahres' : 'Zeitraums')) ?></div></div></div>
             <?php endif; ?>
             <?php if ($sum['forecast_cost'] !== null && !$done): ?>
-                <div class="col"><div class="kpi"><div class="k-label"><i class="bi bi-graph-up-arrow"></i> Prognose Jahreskosten</div>
-                    <div class="k-val"><?= e(eur($sum['forecast_cost'])) ?></div><div class="k-sub">Abschläge gesamt: <?= e(eur($sum['expected_payments'])) ?></div></div></div>
+                <div class="col"><div class="kpi"><div class="k-label"><i class="bi bi-graph-up-arrow"></i> <?= Calc::isYearly($c) ? 'Prognose Jahreskosten' : 'Prognose Zeitraumkosten' ?></div>
+                    <div class="k-val"><?= e(eur($sum['forecast_cost'])) ?></div><div class="k-sub">Zahlungen gesamt: <?= e(eur($sum['expected_payments'])) ?></div></div></div>
                 <div class="col"><div class="kpi"><div class="k-label"><i class="bi bi-bar-chart"></i> Prognose Verbrauch</div>
                     <div class="k-val">≈ <?= e(nf($sum['forecast_kwh'], 0)) ?> kWh</div>
-                    <div class="k-sub"><?= $sum['annual_kwh'] ? 'Vertrag: ' . e(nf($sum['annual_kwh'], 0)) . ' kWh' : 'bis Ende Vertragsjahr' ?></div></div></div>
+                    <div class="k-sub"><?= $sum['annual_kwh'] ? 'Vertrag: ' . e(nf($sum['annual_kwh'], 0)) . ' kWh' : 'bis Ende ' . (Calc::isYearly($c) ? 'Vertragsjahr' : 'Abrechnungszeitraum') ?></div></div></div>
             <?php endif; ?>
         </div>
     </div>

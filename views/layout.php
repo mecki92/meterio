@@ -12,6 +12,13 @@ $alertClass = ['ok' => 'success', 'warn' => 'warning', 'error' => 'danger'];
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="<?= e(url('favicon.ico')) ?>" sizes="48x48">
+    <link rel="icon" type="image/svg+xml" href="<?= e(asset('favicon.svg')) ?>">
+    <link rel="apple-touch-icon" href="<?= e(asset('icons/apple-touch-icon.png')) ?>">
+    <link rel="manifest" href="<?= e(url('site.webmanifest')) ?>">
+    <meta name="theme-color" content="#0f4c81">
+    <meta name="application-name" content="meterio">
+    <meta name="apple-mobile-web-app-title" content="meterio">
     <meta name="robots" content="noindex,nofollow">
     <title><?= e($title) ?> · <?= e(APP_BRAND) ?></title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
@@ -78,7 +85,10 @@ $alertClass = ['ok' => 'success', 'warn' => 'warning', 'error' => 'danger'];
 </main>
 
 <footer class="site-footer text-center text-body-secondary small py-3">
-    <i class="bi bi-lightning-charge-fill bolt"></i> <?= e(APP_BRAND) ?> · Version <?= e(APP_VERSION) ?> · Daten werden verschlüsselt gespeichert
+    <i class="bi bi-lightning-charge-fill bolt"></i> <?= e(APP_BRAND) ?>
+    <?php if ($user): ?>· <a class="text-body-secondary" href="<?= e(url('changelog')) ?>">Version <?= e(APP_VERSION) ?></a><?php endif; ?>
+    · <a class="text-body-secondary" href="<?= e(url('impressum')) ?>">Impressum</a>
+    · <a class="text-body-secondary" href="<?= e(url('datenschutz')) ?>">Datenschutz</a>
 </footer>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="<?= e(asset('app.js')) ?>" defer></script>

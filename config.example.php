@@ -23,6 +23,16 @@ return [
         'charset' => 'utf8mb4',
     ],
 
+    // Angaben für Impressum und Datenschutzerklärung (öffentlich sichtbar!)
+    'legal' => [
+        'name'   => '',   // Vor- und Nachname bzw. Firma
+        'street' => '',   // Straße und Hausnummer
+        'city'   => '',   // PLZ und Ort
+        'email'  => '',   // Kontakt-E-Mail
+        'phone'  => '',   // optional
+        'host'   => 'netcup GmbH, Karlsruhe, Deutschland',   // Hoster (für die Datenschutzerklärung)
+    ],
+
     // Schlüssel für AES-256-GCM (32 Zufallsbytes, Base64). Erzeugen mit:
     //   php -r "echo base64_encode(random_bytes(32)), PHP_EOL;"
     // ACHTUNG: Schlüssel sichern! Ohne ihn sind alle verschlüsselten Daten unwiederbringlich verloren.

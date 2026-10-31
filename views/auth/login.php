@@ -9,7 +9,6 @@
                 <input type="password" name="password" class="form-control" autocomplete="current-password" required></div>
             <button type="submit" class="btn btn-primary w-100">Anmelden</button>
         </form>
-        <p class="text-center mt-3 mb-1"><a href="<?= e(url('forgot')) ?>">Passwort vergessen?</a></p>
-        <p class="text-center text-body-secondary small mb-0">Nach dem Passwort folgt ein Zwei-Faktor-Code.</p>
+        <p class="text-center mt-3 mb-0"><a href="<?= e(url('forgot')) ?>">Passwort vergessen?</a></p>
     </div>
 </div>

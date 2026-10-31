@@ -35,7 +35,102 @@ final class Calc
         return [$sum, $b - $a];
     }
 
-    /** Aktuelles Vertragsjahr [start, end_ex) zum Zeitpunkt $now. */
+    /** Länge des Abrechnungszeitraums in Monaten (12 = Vertragsjahr; 1/3/6 z. B. bei monatlich kündbaren Verträgen). */
+    public static function billingMonths(array $contract): int
+    {
+        $m = (int) ($contract['data']['billing_months'] ?? 12);
+        return in_array($m, [1, 3, 6, 12], true) ? $m : 12;
+    }
+
+    /** Ende des ersten (verkürzten) Abrechnungszeitraums laut Netzbetreiber (exklusiv, Folgetag des Stichtags) oder null. */
+    public static function firstBillingEx(array $contract): ?DateTimeImmutable
+    {
+        $f = $contract['data']['first_billing'] ?? null;
+        if (!$f) {
+            return null;
+        }
+        $d = (new DateTimeImmutable($f))->modify('+1 day');
+        return $d > new DateTimeImmutable($contract['start_date']) ? $d : null;
+    }
+
+    /** true = klassisches Vertragsjahr (12 Monate ab Vertragsbeginn, ohne abweichenden Abrechnungsstichtag). */
+    public static function isYearly(array $contract): bool
+    {
+        return self::billingMonths($contract) === 12 && self::firstBillingEx($contract) === null;
+    }
+
+    /** Beginn des k-ten Abrechnungszeitraums (k = 0: Vertragsbeginn; k = 1: Ende des 1. Zeitraums usw.). */
+    public static function boundary(array $contract, int $k): DateTimeImmutable
+    {
+        $start = new DateTimeImmutable($contract['start_date']);
+        if ($k <= 0) {
+            return $start;
+        }
+        $fb = self::firstBillingEx($contract);
+        $bm = self::billingMonths($contract);
+        return $fb ? $fb->modify('+' . (($k - 1) * $bm) . ' months') : $start->modify('+' . ($k * $bm) . ' months');
+    }
+
+    /** Preisänderungen des Vertrags als Liste [Zeitstempel, Änderung], aufsteigend. */
+    public static function priceChanges(array $contract): array
+    {
+        $out = [];
+        foreach ($contract['data']['price_changes'] ?? [] as $pc) {
+            if (!empty($pc['from'])) {
+                $out[] = [(new DateTimeImmutable($pc['from']))->getTimestamp(), $pc];
+            }
+        }
+        usort($out, static fn($a, $b) => $a[0] <=> $b[0]);
+        return $out;
+    }
+
+    /** Vertragsdaten (Preise, Grundgebühr, Abschlag), wie sie zum Zeitpunkt $ts gelten. Leere Felder einer Änderung gelten „wie bisher“. */
+    public static function dataAt(array $contract, int $ts): array
+    {
+        $d = $contract['data'];
+        foreach (self::priceChanges($contract) as [$cts, $pc]) {
+            if ($cts > $ts) {
+                break;
+            }
+            foreach (['price_et', 'price_ht', 'price_nt', 'feedin', 'monthly_advance'] as $k) {
+                if (isset($pc[$k]) && $pc[$k] !== '') {
+                    $d[$k] = (float) $pc[$k];
+                }
+            }
+            if (isset($pc['base_fee']) && $pc['base_fee'] !== '') {
+                $d['base_fee'] = (float) $pc['base_fee'];
+                $d['base_period'] = ($pc['base_period'] ?? $d['base_period']) === 'year' ? 'year' : 'month';
+            }
+        }
+        return $d;
+    }
+
+    /** Monatlicher Abschlag, der zum Zeitpunkt $ts gilt (oder null). */
+    public static function advanceAt(array $contract, int $ts): ?float
+    {
+        $a = self::dataAt($contract, $ts)['monthly_advance'] ?? null;
+        return $a === null ? null : (float) $a;
+    }
+
+    /** Zerlegt [from, to) an den Tagen, an denen neue Preise gelten. @return list<array{0:int,1:int}> */
+    public static function priceSegments(array $contract, int $from, int $to): array
+    {
+        $cuts = [$from];
+        foreach (self::priceChanges($contract) as [$ts]) {
+            if ($ts > $from && $ts < $to) {
+                $cuts[] = $ts;
+            }
+        }
+        $cuts[] = $to;
+        $cuts = array_values(array_unique($cuts));
+        $out = [];
+        for ($i = 1; $i < count($cuts); $i++) {
+            $out[] = [$cuts[$i - 1], $cuts[$i]];
+        }
+        return $out ?: [[$from, $to]];
+    }
+
+    /** Aktueller Abrechnungszeitraum [start, end_ex) zum Zeitpunkt $now (bei 12 Monaten: das Vertragsjahr). */
     public static function contractYear(array $contract, int $now): array
     {
         $start = new DateTimeImmutable($contract['start_date']);
@@ -46,11 +141,11 @@ final class Calc
         }
         $ref = max($ref, $start->getTimestamp());
         $n = 0;
-        while ($n < 60 && $start->modify('+' . ($n + 1) . ' years')->getTimestamp() <= $ref) {
+        while ($n < 720 && self::boundary($contract, $n + 1)->getTimestamp() <= $ref) {
             $n++;
         }
-        $ys = $start->modify("+$n years");
-        $ye = $start->modify('+' . ($n + 1) . ' years');
+        $ys = self::boundary($contract, $n);
+        $ye = self::boundary($contract, $n + 1);
         if ($end) {
             $endEx = $end->modify('+1 day');
             if ($endEx < $ye) {
@@ -61,28 +156,102 @@ final class Calc
                 'label' => $ys->format('d.m.Y') . ' – ' . $ye->modify('-1 day')->format('d.m.Y')];
     }
 
+    /** Abrechnungszeitraum mit Nummer $idx (1 = erster). */
+    public static function periodInfo(array $contract, int $idx): array
+    {
+        return self::contractYear($contract, self::boundary($contract, max(0, $idx - 1))->getTimestamp());
+    }
+
+    /** Höchste gültige Nummer eines Abrechnungszeitraums (Vertragsende bzw. heute). */
+    public static function maxPeriod(array $contract): int
+    {
+        $ref = !empty($contract['end_date']) ? strtotime($contract['end_date']) : time();
+        return self::contractYear($contract, $ref)['index'];
+    }
+
+    /**
+     * Abrechnungszeitraum einer Zahlung: manuell zugeordnet (data.period) oder nach Datum.
+     * 0 = vor Vertragsbeginn, 9999 = nach Vertragsende.
+     */
+    public static function paymentPeriod(array $contract, array $payment): int
+    {
+        $per = (int) ($payment['data']['period'] ?? 0);
+        if ($per >= 1 && $per <= self::maxPeriod($contract)) {
+            return $per;
+        }
+        $t = strtotime($payment['paid_on']);
+        if ($t < strtotime($contract['start_date'])) {
+            return 0;
+        }
+        if (!empty($contract['end_date']) && $t >= strtotime($contract['end_date'] . ' +1 day')) {
+            return 9999;
+        }
+        return self::contractYear($contract, $t)['index'];
+    }
+
     /** Alle Vertragsjahre als Liste (für Auswahl "Vertragsjahr"). */
     public static function contractYears(array $contract, int $now): array
     {
         $out = [];
         $cur = self::contractYear($contract, $now)['index'];
         for ($i = 1; $i <= $cur; $i++) {
-            $ref = (new DateTimeImmutable($contract['start_date']))->modify('+' . ($i - 1) . ' years')->getTimestamp() + 86400;
+            $ref = self::boundary($contract, $i - 1)->getTimestamp() + 86400;
             $out[] = self::contractYear($contract, $ref);
         }
         return $out;
     }
 
     /** Vertragsjahr (1 = erstes), in dessen Jahresabrechnung eine Gutschrift nach N Monaten verrechnet wird. */
-    public static function creditYearIndex(array $credit): int
+    public static function creditYearIndex(array $contract, array $credit): int
     {
-        return max(1, (int) ceil(((int) $credit['months']) / 12));
+        $ts = self::creditTs($contract, $credit);
+        $k = 1;
+        while ($k < 720 && self::boundary($contract, $k)->getTimestamp() < $ts) {
+            $k++;
+        }
+        return $k;
     }
 
     /** Zeitpunkt, ab dem die Gutschrift gewertet wird (Vertragsbeginn + N Monate). */
     public static function creditTs(array $contract, array $credit): int
     {
         return (new DateTimeImmutable($contract['start_date']))->modify('+' . (int) $credit['months'] . ' months')->getTimestamp();
+    }
+
+    /** Buchungstag der Bonuszahlung: letzter Tag des N-ten Monats ab Vertragsbeginn (bei „nach 12 Monaten“ = letzter Tag des Vertragsjahres), höchstens das Vertragsende. */
+    public static function bonusDueTs(array $contract, array $credit): int
+    {
+        $due = (new DateTimeImmutable($contract['start_date']))->modify('+' . (int) $credit['months'] . ' months')->modify('-1 day');
+        if (!empty($contract['end_date'])) {
+            $end = new DateTimeImmutable($contract['end_date']);
+            if ($end < $due) {
+                $due = $end;
+            }
+        }
+        return $due->getTimestamp();
+    }
+
+    /**
+     * Bonuszahlungen (einmalige Gutschriften) als erwartete Zahlungen, nach Datum sortiert.
+     * Entfällt, wenn der Vertrag endet, bevor „N Monate“ erreicht sind.
+     * @return list<array{ts:int,amount:float,label:string,months:int,year:int}>
+     */
+    public static function bonusPayments(array $contract, ?int $yearIndex = null): array
+    {
+        $out = [];
+        $endEx = !empty($contract['end_date']) ? (new DateTimeImmutable($contract['end_date']))->modify('+1 day')->getTimestamp() : null;
+        foreach ($contract['data']['credits'] ?? [] as $cr) {
+            if ($yearIndex !== null && self::creditYearIndex($contract, $cr) !== $yearIndex) {
+                continue;
+            }
+            if ($endEx !== null && self::creditTs($contract, $cr) > $endEx) {
+                continue;
+            }
+            $out[] = ['ts' => self::bonusDueTs($contract, $cr), 'amount' => (float) $cr['amount'], 'label' => (string) ($cr['label'] ?? ''),
+                      'months' => (int) $cr['months'], 'year' => self::creditYearIndex($contract, $cr)];
+        }
+        usort($out, static fn($a, $b) => $a['ts'] <=> $b['ts']);
+        return $out;
     }
 
     /**
@@ -93,7 +262,7 @@ final class Calc
     {
         $sum = 0.0;
         foreach ($contract['data']['credits'] ?? [] as $cr) {
-            if (self::creditYearIndex($cr) === $yearIndex && ($upTo === null || self::creditTs($contract, $cr) <= $upTo)) {
+            if (self::creditYearIndex($contract, $cr) === $yearIndex && ($upTo === null || self::creditTs($contract, $cr) <= $upTo)) {
                 $sum += (float) $cr['amount'];
             }
         }
@@ -163,6 +332,75 @@ final class Calc
         return ['year_kwh' => $yearKwh, 'year' => $last ? date('Y', $last['ts']) : null, 'with_photo' => $withPhoto, 'span_days' => $span, 'per_month' => $span >= 1 ? $consumed / ($span / 30.4375) : null,
                 'count' => $n, 'first' => $n ? $readings[0] : null, 'last' => $last, 'regs' => $regs, 'consumed' => $consumed, 'photos' => $photos,
                 'days_ago' => $last ? (int) floor((time() - $last['ts']) / 86400) : null];
+    }
+
+    /**
+     * Statistik eines Zählers: Verbrauch je Kalenderjahr und Monat, anteilig (linear zwischen den Ablesungen).
+     * @return array{years: list<array>, months: array, total: float, span_days: float, has_data: bool}
+     */
+    public static function meterStatistics(array $meter, array $series): array
+    {
+        $first = null;
+        $last = null;
+        foreach ($meter['registers'] as $r) {
+            $s = $series[$r['id']] ?? [];
+            if (count($s) >= 2) {
+                $first = $first === null ? $s[0][0] : min($first, $s[0][0]);
+                $last = $last === null ? end($s)[0] : max($last, end($s)[0]);
+            }
+        }
+        if ($first === null) {
+            return ['years' => [], 'months' => [], 'total' => 0.0, 'span_days' => 0.0, 'has_data' => false];
+        }
+        $measure = static function (int $from, int $to) use ($meter, $series): array {
+            $imp = 0.0; $exp = 0.0; $cov = 0; $by = [];
+            foreach ($meter['registers'] as $r) {
+                [$kwh, $c] = self::consumption($series[$r['id']] ?? [], $from, $to);
+                $cov = max($cov, $c);
+                if ($r['tariff'] === 'EXPORT') {
+                    $exp += $kwh;
+                } else {
+                    $imp += $kwh;
+                    $by[$r['tariff']] = ($by[$r['tariff']] ?? 0.0) + $kwh;
+                }
+            }
+            return ['kwh' => $imp, 'export' => $exp, 'cov' => $cov, 'by' => $by];
+        };
+        $years = [];
+        $months = [];
+        $prev = null;
+        $total = 0.0;
+        for ($y = (int) date('Y', $first); $y <= (int) date('Y', $last); $y++) {
+            $from = mktime(0, 0, 0, 1, 1, $y);
+            $to = mktime(0, 0, 0, 1, 1, $y + 1);
+            $m = $measure($from, $to);
+            if ($m['cov'] <= 0) {
+                continue;
+            }
+            $days = ($to - $from) / 86400;
+            $covDays = $m['cov'] / 86400;
+            $partial = $m['cov'] < ($to - $from) - 3600;
+            $row = $m + ['y' => $y, 'days' => $days, 'cov_days' => $covDays, 'partial' => $partial,
+                'per_day' => $m['kwh'] / max(1.0, $covDays),
+                'proj' => ($partial && $covDays >= 30) ? $m['kwh'] / $covDays * $days : null,
+                'delta' => null];
+            $cmp = $row['proj'] ?? $row['kwh'];
+            if ($prev !== null && $prev > 0 && $covDays >= 30) {
+                $row['delta'] = ($cmp - $prev) / $prev * 100;
+            }
+            $prev = $cmp;
+            $total += $m['kwh'];
+            $years[] = $row;
+            for ($mo = 1; $mo <= 12; $mo++) {
+                $mf = mktime(0, 0, 0, $mo, 1, $y);
+                $mt = mktime(0, 0, 0, $mo + 1, 1, $y);
+                $mm = $measure($mf, $mt);
+                if ($mm['cov'] > 0) {
+                    $months[$y][$mo] = ['kwh' => $mm['kwh'], 'partial' => $mm['cov'] < ($mt - $mf) - 3600];
+                }
+            }
+        }
+        return ['years' => $years, 'months' => $months, 'total' => $total, 'span_days' => ($last - $first) / 86400, 'has_data' => (bool) $years];
     }
 
     /** Interpolierter Zählerstand zum Zeitpunkt $t (null außerhalb der Ablesungen). */
@@ -246,26 +484,12 @@ final class Calc
         }
 
         $cost = self::cost($contract, $registers, $series, $from, $to, $yr['index']);
-        $lines = [];
-        foreach (self::BILLED as $t => $key) {
-            if ($d[$key] !== null && $cost['kwh'][$t] > 0) {
-                $lines[] = ['tariff' => $t, 'kwh' => $cost['kwh'][$t], 'price' => (float) $d[$key], 'amount' => round($cost['kwh'][$t] * (float) $d[$key] / 100, 2)];
-            }
-        }
-        $segs = self::baseSegments($d, $from, $to);
-        foreach ($segs as &$sg) {
-            $sg['amount'] = round($sg['amount'], 2);   // wie auf der Rechnung: Zeilen auf Cent gerundet
-        }
-        unset($sg);
-        $base = ['segments' => $segs, 'amount' => array_sum(array_column($segs, 'amount'))];
-        $feedin = $cost['kwh']['EXPORT'] > 0 && $d['feedin'] !== null
-            ? ['kwh' => $cost['kwh']['EXPORT'], 'price' => (float) $d['feedin'], 'amount' => round($cost['credit'], 2)] : null;
-        $credits = [];
-        foreach ($d['credits'] ?? [] as $cr) {
-            if (self::creditYearIndex($cr) === $yr['index']) {
-                $credits[] = ['label' => (string) ($cr['label'] ?? ''), 'months' => (int) $cr['months'], 'amount' => (float) $cr['amount']];
-            }
-        }
+        $lines = $cost['priced']['lines'];
+        $base = ['segments' => $cost['priced']['base_segments'], 'amount' => $cost['priced']['base_entered']];
+        $feedinPrice = self::dataAt($contract, $to - 1)['feedin'] ?? null;
+        $feedin = $cost['kwh']['EXPORT'] > 0 && $feedinPrice !== null
+            ? ['kwh' => $cost['kwh']['EXPORT'], 'price' => (float) $feedinPrice, 'amount' => round($cost['credit'], 2)] : null;
+        $credits = self::bonusPayments($contract, $yr['index']);
         $f = self::grossFactor($d);
         $sumEntered = array_sum(array_column($lines, 'amount')) + $base['amount'];   // so wie erfasst (netto oder brutto)
         if ($f > 1) {   // netto erfasst: USt auf die Nettosumme, auf Cent gerundet
@@ -275,12 +499,12 @@ final class Calc
             $energyGross = round($sumEntered, 2);
             $energyNet = round($energyGross / (1 + self::vatRate($d)), 2);
         }
-        $total = $energyGross - ($feedin['amount'] ?? 0.0) - array_sum(array_column($credits, 'amount'));
+        $total = $energyGross - ($feedin['amount'] ?? 0.0);
+        $bonus = array_sum(array_column($credits, 'amount'));
         $paid = 0.0;
         $payList = [];
         foreach ($payments as $p) {
-            $t = strtotime($p['paid_on']);
-            if ($p['data']['status'] === 'paid' && $t >= $from && $t < $to) {
+            if ($p['data']['status'] === 'paid' && self::paymentPeriod($contract, $p) === $yr['index']) {
                 $paid += (float) $p['data']['amount'];
                 $payList[] = $p;
             }
@@ -292,7 +516,7 @@ final class Calc
         return ['year' => $yr, 'usage' => $usage, 'lines' => $lines, 'base' => $base, 'feedin' => $feedin, 'credits' => $credits,
                 'total' => $total, 'net_basis' => ($d['price_basis'] ?? 'gross') === 'net', 'vat_pct' => (float) ($d['vat_rate'] ?? 19.0),
                 'sum_net' => $energyNet, 'vat' => $energyGross - $energyNet, 'energy_gross' => $energyGross, 'paid' => $paid, 'paid_count' => count($payList),
-                'balance' => $paid - $total, 'complete' => $covered >= ($to - $from) - 86400, 'covered_days' => $covered / 86400];
+                'bonus' => $bonus, 'balance' => $paid + $bonus - $total, 'complete' => $covered >= ($to - $from) - 86400, 'covered_days' => $covered / 86400];
     }
 
     /**
@@ -329,27 +553,41 @@ final class Calc
     }
 
     /**
-     * Brutto-Energie- und Grundpreiskosten wie auf der Rechnung gerundet:
-     * Zeilen auf Cent, USt (bei Netto-Erfassung) auf die Summe.
-     * @return array{0: float, 1: float} [Energie brutto, Grundpreis brutto]
+     * Preisbewertung wie auf der Rechnung: je Preisabschnitt Zeilen auf Cent gerundet, USt (bei Netto-Erfassung) auf die Summe.
+     * @param list<array{0:int,1:int,2:array}> $segs [von, bis, kWh je ET/HT/NT/EXPORT] – jeweils innerhalb eines Preisabschnitts
      */
-    public static function grossCosts(array $d, array $kwh, int $from, int $to): array
+    public static function priced(array $contract, array $segs): array
     {
+        $lines = [];
+        $baseSegs = [];
         $energyE = 0.0;
-        foreach (self::BILLED as $t => $key) {
-            $energyE += round(($kwh[$t] ?? 0.0) * (float) ($d[$key] ?? 0) / 100, 2);
-        }
         $baseE = 0.0;
-        if ($to > $from) {
-            foreach (self::baseSegments($d, $from, $to) as $sg) {
-                $baseE += round($sg['amount'], 2);
+        $credit = 0.0;
+        foreach ($segs as [$a, $b, $kwh]) {
+            $d = self::dataAt($contract, $a);
+            foreach (self::BILLED as $t => $key) {
+                $k = (float) ($kwh[$t] ?? 0.0);
+                $amt = round($k * (float) ($d[$key] ?? 0) / 100, 2);
+                $energyE += $amt;
+                if ($d[$key] !== null && $k > 0) {
+                    $lines[] = ['tariff' => $t, 'from' => $a, 'to' => $b, 'kwh' => $k, 'price' => (float) $d[$key], 'amount' => $amt];
+                }
             }
+            if ($b > $a) {
+                foreach (self::baseSegments($d, $a, $b) as $sg) {
+                    $sg['amount'] = round($sg['amount'], 2);
+                    $baseE += $sg['amount'];
+                    $baseSegs[] = $sg;
+                }
+            }
+            $credit += round((float) ($kwh['EXPORT'] ?? 0.0) * (float) ($d['feedin'] ?? 0) / 100, 2);
         }
         $sum = round($energyE + $baseE, 2);
-        $f = self::grossFactor($d);
-        $gross = $f > 1 ? $sum + round($sum * self::vatRate($d), 2) : $sum;
+        $f = self::grossFactor($contract['data']);
+        $gross = $f > 1 ? $sum + round($sum * self::vatRate($contract['data']), 2) : $sum;
         $baseG = $baseE * $f;
-        return [$gross - $baseG, $baseG];
+        return ['energy' => $gross - $baseG, 'base' => $baseG, 'credit' => $credit, 'lines' => $lines, 'base_segments' => $baseSegs,
+                'base_entered' => $baseE, 'sum_entered' => $sum, 'gross' => $gross];
     }
 
     /** Jahresgrundgebühr in €. */
@@ -360,12 +598,11 @@ final class Calc
     }
 
     /**
-     * Kosten im Zeitraum.
-     * @return array{kwh: array, regs: array, energy: float, credit: float, base: float, total: float}
+     * Kosten im Zeitraum (mit Preisänderungen zum jeweiligen Stichtag).
+     * @return array{kwh: array, regs: array, energy: float, credit: float, base: float, total: float, priced: array}
      */
     public static function cost(array $contract, array $registers, array $series, int $from, int $to, ?int $yearIndex = null): array
     {
-        $d = $contract['data'];
         $kwh = ['ET' => 0.0, 'HT' => 0.0, 'NT' => 0.0, 'EXPORT' => 0.0];
         $regs = [];
         foreach ($registers as $r) {
@@ -376,21 +613,30 @@ final class Calc
             $kwh[$r['tariff']] += $k;
             $regs[$r['id']] = ['tariff' => $r['tariff'], 'kwh' => $k, 'cov' => $cov];
         }
-        [$energy, $base] = self::grossCosts($d, $kwh, $from, $to);
-        $credit = round($kwh['EXPORT'] * (float) ($d['feedin'] ?? 0) / 100, 2);
-        $bonus = $yearIndex !== null ? self::creditsFor($contract, $yearIndex, $to) : 0.0;
-        return ['kwh' => $kwh, 'regs' => $regs, 'energy' => $energy, 'credit' => $credit, 'base' => $base, 'bonus' => $bonus,
-                'total' => $energy + $base - $credit - $bonus];
+        $segs = [];
+        foreach (self::priceSegments($contract, $from, $to) as [$a, $b]) {
+            $sk = ['ET' => 0.0, 'HT' => 0.0, 'NT' => 0.0, 'EXPORT' => 0.0];
+            foreach ($registers as $r) {
+                if (isset($sk[$r['tariff']])) {
+                    $sk[$r['tariff']] += self::consumption($series[$r['id']] ?? [], $a, $b)[0];
+                }
+            }
+            $segs[] = [$a, $b, $sk];
+        }
+        $p = self::priced($contract, $segs);
+        $bonus = 0.0;   // Gutschriften sind Bonuszahlungen (Zahlungsseite), nicht Kostenminderung
+        return ['kwh' => $kwh, 'regs' => $regs, 'energy' => $p['energy'], 'credit' => round($p['credit'], 2), 'base' => $p['base'], 'bonus' => $bonus,
+                'total' => $p['energy'] + $p['base'] - round($p['credit'], 2) - $bonus, 'priced' => $p];
     }
 
     /**
      * Zusammenfassung für ein Vertragsjahr: bisher, Zahlungen, Prognose, Soll-Ist.
      */
-    public static function summary(array $contract, array $registers, array $series, array $payments, ?int $now = null): array
+    public static function summary(array $contract, array $registers, array $series, array $payments, ?int $now = null, ?int $periodIndex = null): array
     {
         $now ??= time();
         $d = $contract['data'];
-        $yr = self::contractYear($contract, $now);
+        $yr = $periodIndex ? self::periodInfo($contract, $periodIndex) : self::contractYear($contract, $now);
 
         $lastTs = 0;
         foreach ($registers as $r) {
@@ -410,9 +656,20 @@ final class Calc
         $paidCount = 0;
         foreach ($payments as $p) {
             $t = strtotime($p['paid_on']);
-            if ($p['data']['status'] === 'paid' && $t >= $yr['start'] && $t < $yr['end_ex'] && $t <= $now + 86399) {
+            if ($p['data']['status'] === 'paid' && self::paymentPeriod($contract, $p) === $yr['index'] && $t <= $now + 86399) {
                 $paid += (float) $p['data']['amount'];
                 $paidCount++;
+            }
+        }
+
+        // Bonuszahlungen (Gutschriften): am Ende des Vertragsjahres gebucht
+        $bonusRecv = 0.0;
+        $bonusPending = [];
+        foreach (self::bonusPayments($contract, $yr['index']) as $bp) {
+            if ($bp['ts'] <= $now + 86399) {
+                $bonusRecv += $bp['amount'];
+            } else {
+                $bonusPending[] = $bp;
             }
         }
 
@@ -422,14 +679,18 @@ final class Calc
             $diff = (new DateTimeImmutable('@' . $now))->diff(new DateTimeImmutable('@' . $yr['end_ex']));
             $remainingMonths = $diff->y * 12 + $diff->m;
         }
-        $advance = $d['monthly_advance'] !== null ? (float) $d['monthly_advance'] : null;
-        $expectedPayments = $paid + ($advance !== null ? $advance * $remainingMonths : 0.0);
+        $advance = self::advanceAt($contract, $now);
+        $advFuture = 0.0;
+        for ($k = 1; $k <= $remainingMonths; $k++) {   // ggf. mit geändertem Abschlag ab einem Stichtag
+            $advFuture += self::advanceAt($contract, (new DateTimeImmutable('@' . $now))->modify("+$k months")->getTimestamp()) ?? 0.0;
+        }
+        $expectedPayments = $paid + $bonusRecv + $advFuture + array_sum(array_column($bonusPending, 'amount'));
 
         $res = [
             'year' => $yr, 'has_data' => $hasData, 'accrual_to' => $accrualTo, 'paid' => $paid, 'paid_count' => $paidCount,
             'remaining_months' => $remainingMonths, 'expected_payments' => $expectedPayments, 'warnings' => $warnings,
             'cost' => null, 'forecast_cost' => null, 'forecast_kwh' => null, 'balance_now' => null, 'balance_forecast' => null,
-            'credits_pending' => [], 'days_covered' => 0.0, 'annual_kwh' => $d['annual_kwh'] !== null ? (float) $d['annual_kwh'] : null,
+            'credits_pending' => $bonusPending, 'bonus_received' => $bonusRecv, 'days_covered' => 0.0, 'annual_kwh' => $d['annual_kwh'] !== null ? (float) $d['annual_kwh'] : null,
         ];
         if (!$hasData) {
             $res['warnings'][] = 'Für dieses Vertragsjahr liegen noch nicht genug Ablesungen vor (mindestens zwei, davon eine nach Vertragsbeginn).';
@@ -437,20 +698,19 @@ final class Calc
         }
 
         $c = self::cost($contract, $registers, $series, $yr['start'], $accrualTo, $yr['index']);
-        foreach ($contract['data']['credits'] ?? [] as $cr) {
-            if (self::creditYearIndex($cr) === $yr['index'] && self::creditTs($contract, $cr) > $accrualTo) {
-                $res['credits_pending'][] = ['amount' => (float) $cr['amount'], 'ts' => self::creditTs($contract, $cr), 'label' => (string) ($cr['label'] ?? '')];
-            }
-        }
         $res['cost'] = $c;
-        $res['balance_now'] = $paid - $c['total'];
+        $res['balance_now'] = $paid + $bonusRecv - $c['total'];
 
         // Prognose: Tagesdurchschnitt je Register hochrechnen
         $remainingDays = max(0, ($yr['end_ex'] - $accrualTo) / 86400);
         $maxCov = 0;
         $fkwh = ['ET' => 0.0, 'HT' => 0.0, 'NT' => 0.0, 'EXPORT' => 0.0];
+        $fsegs = [];
+        foreach (self::priceSegments($contract, $yr['start'], $yr['end_ex']) as [$a, $b]) {
+            $fsegs[] = [$a, $b, ['ET' => 0.0, 'HT' => 0.0, 'NT' => 0.0, 'EXPORT' => 0.0]];
+        }
         $ok = true;
-        foreach ($c['regs'] as $info) {
+        foreach ($c['regs'] as $rid => $info) {
             $maxCov = max($maxCov, $info['cov']);
             if ($info['cov'] < 86400) {
                 $ok = false;
@@ -458,12 +718,17 @@ final class Calc
             }
             $perDay = $info['kwh'] / ($info['cov'] / 86400);
             $fkwh[$info['tariff']] += $info['kwh'] + $perDay * $remainingDays;
+            foreach ($fsegs as &$fs) {   // Ist-Verbrauch je Preisabschnitt + Tagesdurchschnitt für die Resttage
+                $act = self::consumption($series[$rid] ?? [], $fs[0], min($fs[1], $accrualTo))[0];
+                $future = max(0, $fs[1] - max($fs[0], $accrualTo)) / 86400;
+                $fs[2][$info['tariff']] += $act + $perDay * $future;
+            }
+            unset($fs);
         }
         $res['days_covered'] = $maxCov / 86400;
         if ($ok && $c['regs']) {
-            [$energy, $base] = self::grossCosts($d, $fkwh, $yr['start'], $yr['end_ex']);
-            $credit = round($fkwh['EXPORT'] * (float) ($d['feedin'] ?? 0) / 100, 2);
-            $res['forecast_cost'] = $energy + $base - $credit - self::creditsFor($contract, $yr['index']);
+            $fp = self::priced($contract, $fsegs);
+            $res['forecast_cost'] = $fp['energy'] + $fp['base'] - round($fp['credit'], 2);
             $res['forecast_kwh'] = $fkwh['ET'] + $fkwh['HT'] + $fkwh['NT'];
             $res['forecast_export_kwh'] = $fkwh['EXPORT'];
             $res['balance_forecast'] = $expectedPayments - $res['forecast_cost'];

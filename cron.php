@@ -42,6 +42,13 @@ foreach ($users as $u) {
         if ($due && !$alreadyThisMonth) {
             $reason = 'Monatliche Erinnerung zur Zählerablesung';
         }
+    } elseif ($u['reminder_mode'] === 'month_end') {
+        $monthStart = $today->modify('first day of this month');
+        $due = $today->format('Y-m-d') === $today->modify('last day of this month')->format('Y-m-d');
+        $alreadyThisMonth = $lastReminder && $lastReminder >= $monthStart;
+        if ($due && !$alreadyThisMonth) {
+            $reason = 'Heute ist Monatsende – Zeit für die Zählerablesung';
+        }
     } elseif ($u['reminder_mode'] === 'contract_year') {
         foreach (Repo::contracts($uid) as $c) {
             if ($c['start_date'] > $today->format('Y-m-d') || ($c['end_date'] && $c['end_date'] < $today->format('Y-m-d'))) {
@@ -50,7 +57,7 @@ foreach ($users as $u) {
             $yr = Calc::contractYear($c, $today->getTimestamp());
             $daysLeft = (int) floor(($yr['end_ex'] - $today->getTimestamp()) / 86400);
             if ($daysLeft >= 0 && $daysLeft <= 14 && (!$lastReminder || $lastReminder < $today->modify('-20 days'))) {
-                $reason = 'Dein Vertragsjahr endet in ' . $daysLeft . ' Tag(en) (' . $yr['label'] . ') – bitte lies die Zähler für die Abrechnung ab';
+                $reason = 'Dein ' . period_word($c) . ' endet in ' . $daysLeft . ' Tag(en) (' . $yr['label'] . ') – bitte lies die Zähler für die Abrechnung ab';
                 break;
             }
         }
@@ -62,7 +69,7 @@ foreach ($users as $u) {
     $rows = '';
     foreach ($meters as $m) {
         $last = Db::val('SELECT MAX(read_at) FROM readings WHERE meter_id = ?', [$m['id']]);
-        $rows .= '<li><b>' . e($m['name']) . '</b> – letzte Ablesung: ' . ($last ? e(date('d.m.Y', strtotime($last))) : 'noch keine') . '</li>';
+        $rows .= '<li><b>' . e(mask_tail($m['name'], 4)) . '</b> – letzte Ablesung: ' . ($last ? e(date('d.m.Y', strtotime($last))) : 'noch keine') . '</li>';
     }
     $html = Mailer::wrap('Zeit zum Ablesen ⚡', '<p>Hallo ' . e($u['name']) . ',</p><p>' . e($reason) . '.</p><ul>' . $rows . '</ul>'
         . Mailer::button(abs_url('dashboard'), 'Zählerstand erfassen')

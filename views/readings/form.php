@@ -10,8 +10,10 @@ $maxMb = (int) Config::get('uploads.max_size_mb', 12);
         <p class="sub"><i class="bi bi-speedometer2"></i> <?= e($meter['name']) ?><?= $prev ? ' · letzte Ablesung ' . e(date('d.m.Y', $prev['ts'])) : '' ?></p></div>
 </div>
 
-<form method="post" action="<?= e(url($action)) ?>" enctype="multipart/form-data">
+<form method="post" action="<?= e(url($action)) ?>" enctype="multipart/form-data" id="readingform"
+      data-check="<?= e(url('meters/' . $meter['id'] . '/readings/check')) ?>" data-ignore="<?= $isNew ? 0 : (int) $reading['id'] ?>">
     <?= csrf_field() ?>
+    <input type="hidden" name="force" id="force" value="<?= !empty($form['force']) ? '1' : '' ?>">
     <div class="row g-3">
         <div class="col-lg-7">
             <div class="card h-100">
@@ -35,9 +37,12 @@ $maxMb = (int) Config::get('uploads.max_size_mb', 12);
                     <?php endforeach; ?>
                     <div class="mb-3"><label class="form-label" for="note">Notiz <span class="text-body-secondary fw-normal">(optional)</span></label>
                         <input id="note" name="note" class="form-control" value="<?= e($form['note']) ?>" maxlength="1000" placeholder="z. B. neuer Zähler Nr. 12345, Startwert 0"></div>
-                    <div class="form-check"><input class="form-check-input" type="checkbox" name="force" id="force" value="1" <?= !empty($form['force']) ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="force">Trotzdem speichern, auch wenn ein Wert unplausibel erscheint</label>
-                        <div class="form-text">Bei Anlass „Zählerwechsel“ ist das nicht nötig.</div></div>
+                    <?php if ($isNew): ?>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" name="notify" id="notify" value="1" <?= !empty($form['notify']) ? 'checked' : '' ?>>
+                        <label class="form-check-label" for="notify">Per E-Mail zusenden<?= info('Du erhältst den Zählerstand samt Fotos per E-Mail, z. B. um ihn beim Netzbetreiber einzutragen.') ?></label>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -86,3 +91,22 @@ $maxMb = (int) Config::get('uploads.max_size_mb', 12);
     </form>
 </details>
 <?php endif; ?>
+
+<div class="modal fade" id="plausModal" tabindex="-1" aria-labelledby="plausTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="plausTitle"><i class="bi bi-exclamation-triangle text-warning"></i> Unplausibler Wert</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="mb-3" id="plausList"></ul>
+                <p class="mb-0">Soll die Ablesung trotzdem gespeichert werden?<br><small class="text-body-secondary">Bei einem Zählerwechsel wähle stattdessen den Anlass „Zählerwechsel“.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><i class="bi bi-pencil"></i> Wert prüfen</button>
+                <button type="button" class="btn btn-warning" id="plausSave"><i class="bi bi-check-lg"></i> Trotzdem speichern</button>
+            </div>
+        </div>
+    </div>
+</div>

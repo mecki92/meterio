@@ -6,6 +6,42 @@ function e(mixed $v): string
     return htmlspecialchars((string) $v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
+/** Datenschutz: alle Zeichen bis auf die letzten $keep durch Punkte ersetzen (Leerzeichen/Bindestriche bleiben). */
+function mask_tail(string $s, int $keep = 4): string
+{
+    $c = preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $n = count($c);
+    foreach ($c as $i => $ch) {
+        if ($i < $n - $keep && trim($ch) !== '' && $ch !== '-') {
+            $c[$i] = '•';
+        }
+    }
+    return implode('', $c);
+}
+
+/** Datenschutz: je Wort nur den ersten Buchstaben zeigen. */
+function mask_words(string $s): string
+{
+    return implode(' ', array_map(static function (string $w): string {
+        $len = mb_strlen($w);
+        return $len <= 1 ? $w : mb_substr($w, 0, 1) . str_repeat('•', $len - 1);
+    }, preg_split('/\s+/u', trim($s), -1, PREG_SPLIT_NO_EMPTY) ?: []));
+}
+
+/** Bezeichnung des Abrechnungszeitraums: „Vertragsjahr“ bei 12 Monaten, sonst „Abrechnungszeitraum“. */
+function period_word(array $contract): string
+{
+    return Calc::isYearly($contract) ? 'Vertragsjahr' : 'Abrechnungszeitraum';
+}
+
+/** Kleiner Info-Button (Popover) hinter einer Feldbezeichnung; $id optional, damit JS den Text anpassen kann. */
+function info(string $text, string $id = ''): string
+{
+    return ' <button type="button" class="info-btn"' . ($id !== '' ? ' id="' . e($id) . '"' : '')
+        . ' data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="top" data-bs-content="' . e($text)
+        . '" aria-label="Hinweis: ' . e($text) . '"><i class="bi bi-info-circle"></i></button>';
+}
+
 function base_path(): string
 {
     static $p = null;

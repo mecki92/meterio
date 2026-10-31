@@ -4,7 +4,8 @@ declare(strict_types=1);
 /** Schlanker SMTP-Client (SSL/STARTTLS, AUTH LOGIN) ohne externe Abhängigkeiten – ausgelegt für netcup SMTP. */
 final class Mailer
 {
-    public static function send(string $to, string $subject, string $html, ?string $text = null): bool
+    /** @param list<array{0: string, 1: string, 2: string}> $attachments [Dateiname, MIME-Typ, Inhalt] */
+    public static function send(string $to, string $subject, string $html, ?string $text = null, array $attachments = []): bool
     {
         $cfg  = (array) Config::get('mail', []);
         $to   = self::clean($to);
@@ -16,6 +17,7 @@ final class Mailer
         $boundary = 'mtr_' . bin2hex(random_bytes(12));
         $domain   = substr(strrchr($fromAddr, '@') ?: '@localhost', 1);
 
+        $outer = $attachments ? 'mtm_' . bin2hex(random_bytes(12)) : null;
         $headers = [
             'Date: ' . date('r'),
             'From: ' . self::encodeHeader($fromName) . ' <' . $fromAddr . '>',
@@ -24,13 +26,22 @@ final class Mailer
             'Message-ID: <' . bin2hex(random_bytes(10)) . '@' . $domain . '>',
             'MIME-Version: 1.0',
             'X-Mailer: ' . APP_BRAND,
-            'Content-Type: multipart/alternative; boundary="' . $boundary . '"',
+            $outer ? 'Content-Type: multipart/mixed; boundary="' . $outer . '"' : 'Content-Type: multipart/alternative; boundary="' . $boundary . '"',
         ];
         $body = "--$boundary\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
             . chunk_split(base64_encode($text))
             . "--$boundary\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n"
             . chunk_split(base64_encode($html))
             . "--$boundary--\r\n";
+        if ($outer) {
+            $parts = "--$outer\r\nContent-Type: multipart/alternative; boundary=\"$boundary\"\r\n\r\n" . $body;
+            foreach ($attachments as [$fname, $mime, $bytes]) {
+                $fname = self::clean($fname);
+                $parts .= "--$outer\r\nContent-Type: $mime; name=\"$fname\"\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"$fname\"\r\n\r\n"
+                    . chunk_split(base64_encode($bytes));
+            }
+            $body = $parts . "--$outer--\r\n";
+        }
         $message = implode("\r\n", $headers) . "\r\n\r\n" . $body;
 
         if (($cfg['driver'] ?? 'smtp') === 'log') {

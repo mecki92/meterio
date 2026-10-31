@@ -13,7 +13,17 @@ final class ContractController
         $rows = [];
         foreach (Repo::contracts((int) $u['id']) as $c) {
             $m = $meters[$c['meter_id']] ?? null;
-            $rows[] = ['c' => $c, 'meter' => $m, 'sum' => $m ? $this->summary($c, $m) : null];
+            $tiles = [];
+            if ($m && strtotime($c['start_date']) <= time()) {
+                $cur = Calc::contractYear($c, time())['index'];
+                $tiles[] = ['idx' => $cur, 'done' => null, 'sum' => $this->summary($c, $m)];
+                for ($k = $cur - 1; $k >= 1; $k--) {   // abgeschlossene Abrechnungszeiträume als eigene Kacheln
+                    $tiles[] = ['idx' => $k, 'done' => true, 'sum' => self::summaryFor($c, $m, $k)];
+                }
+            } elseif ($m) {
+                $tiles[] = ['idx' => 1, 'done' => null, 'sum' => $this->summary($c, $m)];
+            }
+            $rows[] = ['c' => $c, 'meter' => $m, 'sum' => $tiles[0]['sum'] ?? null, 'tiles' => $tiles];
         }
         view('contracts/index', ['title' => 'Verträge', 'active' => 'contracts', 'rows' => $rows]);
     }
@@ -105,6 +115,13 @@ final class ContractController
     }
 
     // ---------- Zahlungen ----------
+    /** Angezeigter Abrechnungszeitraum der Vertragsansicht (Query-String), damit er nach dem Speichern erhalten bleibt. */
+    private function viewQuery(): string
+    {
+        $v = (int) ($_POST['view'] ?? 0);
+        return $v > 0 ? '?period=' . $v : '';
+    }
+
     public function paymentStore(int $contractId): void
     {
         $u = Auth::require();
@@ -112,11 +129,11 @@ final class ContractController
         [$date, $data, $err] = $this->paymentInput();
         if ($err) {
             flash('error', $err);
-            redirect('contracts/' . $contractId);
+            redirect('contracts/' . $contractId . $this->viewQuery() . '#zahlungen');
         }
         Db::insert('INSERT INTO payments (contract_id, paid_on, data_enc, created_at) VALUES (?,?,?,NOW())', [$contractId, $date, Crypto::encJson($data)]);
         flash('ok', 'Zahlung erfasst.');
-        redirect('contracts/' . $contractId);
+        redirect('contracts/' . $contractId . $this->viewQuery() . '#zahlungen');
     }
 
     public function paymentUpdate(int $id): void
@@ -126,11 +143,11 @@ final class ContractController
         [$date, $data, $err] = $this->paymentInput();
         if ($err) {
             flash('error', $err);
-            redirect('contracts/' . $p['contract_id'] . '?edit=' . $id);
+            redirect('contracts/' . $p['contract_id'] . '?edit=' . $id . ($this->viewQuery() !== '' ? '&' . substr($this->viewQuery(), 1) : '') . '#zahlungen');
         }
         Db::exec('UPDATE payments SET paid_on=?, data_enc=? WHERE id=?', [$date, Crypto::encJson($data), $id]);
         flash('ok', 'Zahlung aktualisiert.');
-        redirect('contracts/' . $p['contract_id']);
+        redirect('contracts/' . $p['contract_id'] . $this->viewQuery() . '#zahlungen');
     }
 
     public function paymentDelete(int $id): void
@@ -139,14 +156,14 @@ final class ContractController
         $p = Repo::payment((int) $u['id'], $id) ?? abort(404);
         Db::exec('DELETE FROM payments WHERE id=?', [$id]);
         flash('ok', 'Zahlung gelöscht.');
-        redirect('contracts/' . $p['contract_id']);
+        redirect('contracts/' . $p['contract_id'] . $this->viewQuery() . '#zahlungen');
     }
 
     // ---------- intern ----------
-    public static function summaryFor(array $c, array $meter): array
+    public static function summaryFor(array $c, array $meter, ?int $periodIndex = null): array
     {
         $readings = Repo::readings($meter['id']);
-        return Calc::summary($c, $meter['registers'], Repo::series($readings), Repo::payments($c['id']));
+        return Calc::summary($c, $meter['registers'], Repo::series($readings), Repo::payments($c['id']), null, $periodIndex);
     }
 
     private function summary(array $c, array $m): array
@@ -164,7 +181,7 @@ final class ContractController
         return ['id' => 0, 'meter_id' => $meterId, 'start_date' => date('Y-m-d'), 'end_date' => null, 'data' => [
             'provider' => '', 'contract_no' => '', 'base_fee' => null, 'base_period' => 'month', 'price_et' => null, 'price_ht' => null,
             'price_nt' => null, 'feedin' => null, 'annual_kwh' => null, 'monthly_advance' => null, 'note' => '',
-            'min_term_months' => null, 'credits' => [], 'price_basis' => 'gross', 'vat_rate' => 19.0]];
+            'min_term_months' => null, 'credits' => [], 'price_basis' => 'gross', 'vat_rate' => 19.0, 'billing_months' => 12, 'first_billing' => null, 'price_changes' => []]];
     }
 
     /** @return array{0: array, 1: ?string} */
@@ -182,7 +199,9 @@ final class ContractController
             'price_et' => $num('price_et'), 'price_ht' => $num('price_ht'), 'price_nt' => $num('price_nt'), 'feedin' => $num('feedin'),
             'annual_kwh' => parse_kwh($_POST['annual_kwh'] ?? ''), 'monthly_advance' => $num('monthly_advance'),
             'note' => mb_trim_len((string) ($_POST['note'] ?? ''), 1000),
-            'min_term_months' => null, 'credits' => [],
+            'min_term_months' => null, 'credits' => [], 'price_changes' => [],
+            'billing_months' => in_array((int) ($_POST['billing_months'] ?? 12), [1, 3, 6, 12], true) ? (int) $_POST['billing_months'] : 12,
+            'first_billing' => parse_date((string) ($_POST['first_billing'] ?? '')),
             'price_basis' => ($_POST['price_basis'] ?? '') === 'net' ? 'net' : 'gross',
             'vat_rate' => in_array((string) ($_POST['vat_rate'] ?? ''), ['19', '7', '0'], true) ? (float) $_POST['vat_rate'] : 19.0,
         ];
@@ -206,6 +225,33 @@ final class ContractController
             $data['credits'][] = ['months' => $mo, 'amount' => $amt, 'label' => $label];
         }
         usort($data['credits'], static fn($a, $b) => $a['months'] <=> $b['months']);
+        $changeErr = null;
+        foreach ((array) ($_POST['pc'] ?? []) as $pc) {
+            if (!is_array($pc)) {
+                continue;
+            }
+            $vals = [];
+            foreach (['base_fee', 'price_et', 'price_ht', 'price_nt', 'feedin', 'monthly_advance'] as $k) {
+                $vals[$k] = parse_num($pc[$k] ?? '');
+            }
+            $label = mb_trim_len((string) ($pc['label'] ?? ''), 80);
+            $fromRaw = trim((string) ($pc['from'] ?? ''));
+            if ($fromRaw === '' && $label === '' && !array_filter($vals, static fn($v) => $v !== null)) {
+                continue; // leere Zeile
+            }
+            $from = $fromRaw === '' ? null : parse_date($fromRaw);
+            if (!$from || !array_filter($vals, static fn($v) => $v !== null)) {
+                $changeErr = 'Preisänderung: bitte ein Datum und mindestens einen neuen Wert angeben.';
+                continue;
+            }
+            foreach ($vals as $v) {
+                if ($v !== null && ($v < 0 || $v > 1000000)) {
+                    $changeErr = 'Preisänderung: ungültiger Zahlenwert.';
+                }
+            }
+            $data['price_changes'][] = ['from' => $from, 'label' => $label, 'base_period' => ($pc['base_period'] ?? '') === 'year' ? 'year' : 'month'] + $vals;
+        }
+        usort($data['price_changes'], static fn($a, $b) => strcmp($a['from'], $b['from']));
         $row = ['meter_id' => $meterId, 'start_date' => $start ?? (string) ($_POST['start_date'] ?? ''), 'end_date' => $end, 'data' => $data];
 
         $err = null;
@@ -221,7 +267,16 @@ final class ContractController
             $err = 'Die Mindestvertragslaufzeit muss zwischen 1 und 120 Monaten liegen.';
         } elseif ($creditErr) {
             $err = $creditErr;
+        } elseif ($changeErr) {
+            $err = $changeErr;
+        } elseif ($data['first_billing'] && ($data['first_billing'] < $start || ($end && $data['first_billing'] >= $end))) {
+            $err = 'Erste Abrechnung: der Stichtag muss zwischen Vertragsbeginn und Vertragsende liegen.';
         } else {
+            foreach ($data['price_changes'] as $pc) {
+                if ($pc['from'] <= $start || ($end && $pc['from'] > $end)) {
+                    $err = 'Preisänderung ab ' . fmt_date($pc['from']) . ': das Datum muss nach dem Vertragsbeginn und vor dem Vertragsende liegen.';
+                }
+            }
             foreach (['base_fee', 'price_et', 'price_ht', 'price_nt', 'feedin', 'annual_kwh', 'monthly_advance'] as $k) {
                 if ($data[$k] !== null && ($data[$k] < 0 || $data[$k] > 1000000)) {
                     $err = 'Ungültiger Zahlenwert im Feld „' . $k . '“.';
@@ -242,7 +297,11 @@ final class ContractController
         $status = in_array($_POST['status'] ?? '', ['paid', 'open'], true) ? $_POST['status'] : 'paid';
         $kind = ($_POST['kind'] ?? '') === 'special' ? 'special' : 'advance';
         $data = ['amount' => $amount, 'status' => $status, 'kind' => $kind, 'note' => mb_trim_len((string) ($_POST['note'] ?? ''), 200)];
-        if (!$date) {
+        $per = (int) ($_POST['period'] ?? 0);
+        if ($per >= 1 && $per <= 720) {
+            $data['period'] = $per;   // manuelle Zuordnung zu einem Abrechnungszeitraum (z. B. Rückstand)
+        }
+        if (!$date || (int) substr($date, 0, 4) < 2000 || (int) substr($date, 0, 4) > 2100) {
             return [null, $data, 'Bitte ein gültiges Datum angeben.'];
         }
         if ($amount === null || abs($amount) > 1000000) {

@@ -56,6 +56,14 @@ final class MeterController
         view('meters/show', ['title' => $m['name'], 'active' => 'meters', 'meter' => $m, 'readings' => array_reverse($asc), 'stats' => $stats]);
     }
 
+    public function stats(int $id): void
+    {
+        $u = Auth::require();
+        $m = $this->own($u, $id);
+        $series = Repo::series(Repo::readings($id));
+        view('meters/stats', ['title' => 'Statistik ' . $m['name'], 'active' => 'meters', 'meter' => $m, 'st' => Calc::meterStatistics($m, $series)]);
+    }
+
     public function edit(int $id): void
     {
         $u = Auth::require();

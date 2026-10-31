@@ -10,7 +10,7 @@ final class ReadingController
         $all = Repo::readings($meterId);
         view('readings/form', [
             'title' => 'Ablesung erfassen', 'active' => 'meters', 'meter' => $m, 'reading' => null,
-            'prev' => $all ? end($all) : null, 'form' => ['read_at' => input_date(), 'reason' => 'regular', 'note' => '', 'values' => []],
+            'prev' => $all ? end($all) : null, 'form' => ['read_at' => input_date(), 'reason' => 'regular', 'note' => '', 'values' => [], 'notify' => (int) ($u['notify_reading'] ?? 1) === 1],
         ]);
     }
 
@@ -32,7 +32,11 @@ final class ReadingController
             return $rid;
         });
         $this->savePhotos((int) $u['id'], $rid);
-        flash('ok', 'Ablesung gespeichert.');
+        $msg = 'Ablesung gespeichert.';
+        if (isset($_POST['notify'])) {
+            $msg .= $this->notify($u, $m, $rid, $readAt, $reason, $note, $values) ? ' Eine Kopie wurde dir per E-Mail gesendet.' : ' Die E-Mail konnte leider nicht gesendet werden.';
+        }
+        flash('ok', $msg);
         redirect('meters/' . $meterId);
     }
 
@@ -142,7 +146,7 @@ final class ReadingController
         }
         view('readings/form', [
             'title' => $reading ? 'Ablesung bearbeiten' : 'Ablesung erfassen', 'active' => 'meters', 'meter' => $m, 'reading' => $reading, 'prev' => null,
-            'form' => ['read_at' => (string) ($_POST['read_at'] ?? input_date()), 'reason' => $this->reason(), 'note' => (string) ($_POST['note'] ?? ''), 'values' => $vals, 'raw' => $_POST['val'] ?? [], 'force' => !empty($_POST['force'])],
+            'form' => ['read_at' => (string) ($_POST['read_at'] ?? input_date()), 'reason' => $this->reason(), 'note' => (string) ($_POST['note'] ?? ''), 'values' => $vals, 'raw' => $_POST['val'] ?? [], 'force' => !empty($_POST['force']), 'notify' => isset($_POST['notify'])],
         ]);
     }
 
@@ -174,39 +178,116 @@ final class ReadingController
             return [null, [], $note, 'Bitte mindestens einen Zählerstand eingeben.'];
         }
         if (empty($_POST['force']) && $this->reason() !== 'meter_change') {
-            $ts = strtotime($readAt);
-            $others = array_values(array_filter(Repo::readings($m['id']), static fn($o) => $o['id'] !== $ignoreReadingId));
-            foreach ($values as $regId => $v) {
-                $reg = array_values(array_filter($m['registers'], static fn($x) => $x['id'] === $regId))[0];
-                $prev = null;
-                $next = null;
-                foreach ($others as $o) {   // aufsteigend: nächste Nachbarn je Register
-                    if (!isset($o['values'][$regId])) {
-                        continue;
-                    }
-                    if ($o['ts'] <= $ts) {
-                        $prev = $o;
-                    } elseif ($next === null) {
-                        $next = $o;
-                    }
-                }
-                if ($prev && $prev['values'][$regId] > $v) {
-                    return [null, [], $note, 'Plausibilität: „' . Repo::registerTitle($reg) . '“ ist niedriger als bei der Ablesung vom ' . date('d.m.Y', $prev['ts'])
-                        . ' (' . nf($prev['values'][$regId], 0) . '). Bei Zählerwechsel bitte den Anlass „Zählerwechsel“ wählen oder „Trotzdem speichern“ ankreuzen.'];
-                }
-                if ($next && $next['reason'] !== 'meter_change' && $next['values'][$regId] < $v) {
-                    return [null, [], $note, 'Plausibilität: „' . Repo::registerTitle($reg) . '“ ist höher als bei der späteren Ablesung vom ' . date('d.m.Y', $next['ts'])
-                        . ' (' . nf($next['values'][$regId], 0) . '). Bitte prüfen oder „Trotzdem speichern“ ankreuzen.'];
-                }
+            $warn = $this->plausibility($m, $readAt, $values, $ignoreReadingId);
+            if ($warn) {
+                return [null, [], $note, 'Plausibilität: ' . implode(' ', $warn) . ' Bitte prüfen oder die Speicherung bestätigen.'];
             }
         }
         return [$readAt, $values, $note, null];
+    }
+
+    /** Unplausible Werte im Vergleich zu den Nachbar-Ablesungen (Zählerstand darf nicht sinken). @return list<string> */
+    private function plausibility(array $m, string $readAt, array $values, ?int $ignoreReadingId): array
+    {
+        $out = [];
+        $ts = strtotime($readAt);
+        $others = array_values(array_filter(Repo::readings($m['id']), static fn($o) => $o['id'] !== $ignoreReadingId));
+        foreach ($values as $regId => $v) {
+            $reg = array_values(array_filter($m['registers'], static fn($x) => $x['id'] === $regId))[0];
+            $prev = null;
+            $next = null;
+            foreach ($others as $o) {   // aufsteigend: nächste Nachbarn je Register
+                if (!isset($o['values'][$regId])) {
+                    continue;
+                }
+                if ($o['ts'] <= $ts) {
+                    $prev = $o;
+                } elseif ($next === null) {
+                    $next = $o;
+                }
+            }
+            if ($prev && $prev['values'][$regId] > $v) {
+                $out[] = '„' . Repo::registerTitle($reg) . '“ (' . nf($v, 0) . ' kWh) ist niedriger als bei der Ablesung vom ' . date('d.m.Y', $prev['ts'])
+                    . ' (' . nf($prev['values'][$regId], 0) . ' kWh).';
+            }
+            if ($next && $next['reason'] !== 'meter_change' && $next['values'][$regId] < $v) {
+                $out[] = '„' . Repo::registerTitle($reg) . '“ (' . nf($v, 0) . ' kWh) ist höher als bei der späteren Ablesung vom ' . date('d.m.Y', $next['ts'])
+                    . ' (' . nf($next['values'][$regId], 0) . ' kWh).';
+            }
+        }
+        return $out;
+    }
+
+    /** AJAX-Vorabprüfung: liefert Plausibilitätswarnungen, ohne zu speichern. */
+    public function check(int $meterId): void
+    {
+        $u = Auth::require();
+        $m = $this->meter($u, $meterId);
+        $ignore = (int) ($_POST['ignore'] ?? 0);
+        $ignore = $ignore > 0 && Repo::reading((int) $u['id'], $ignore) ? $ignore : null;
+        $day = parse_date((string) ($_POST['read_at'] ?? ''));
+        $values = [];
+        foreach ($m['registers'] as $reg) {
+            $v = parse_kwh($_POST['val'][$reg['id']] ?? '');
+            if ($v !== null && $v >= 0) {
+                $values[$reg['id']] = $v;
+            }
+        }
+        $warnings = [];
+        if ($day && $values && $this->reason() !== 'meter_change') {
+            $warnings = $this->plausibility($m, $day . ' 00:00:00', $values, $ignore);
+        }
+        json_response(['warnings' => $warnings]);
     }
 
     private function reason(): string
     {
         $r = (string) ($_POST['reason'] ?? 'regular');
         return isset(reading_reasons()[$r]) ? $r : 'regular';
+    }
+
+    /** Schickt dem Benutzer den neuen Zählerstand samt Fotos als Erinnerung, ihn beim Netzbetreiber einzutragen. */
+    private function notify(array $u, array $m, int $rid, string $readAt, string $reason, string $note, array $values): bool
+    {
+        try {
+            $label = reading_reasons()[$reason][0] ?? 'Ablesung';
+            $mName = mask_tail($m['name'], 4);      // Datenschutz: Zählernummer / Adresse in der Mail teilweise geschwärzt
+            $mLoc = mask_words((string) $m['location']);
+            $date = fmt_date($readAt);
+            $rows = '';
+            foreach ($m['registers'] as $reg) {
+                if (!isset($values[$reg['id']])) {
+                    continue;
+                }
+                $v = nf((float) $values[$reg['id']], 0);
+                $t = Repo::registerTitle($reg);
+                $rows .= '<li>' . e($t) . ': <b>' . e($v) . ' kWh</b></li>';
+            }
+            $attach = [];
+            $total = 0;
+            foreach (Db::all('SELECT id, file_name FROM reading_photos WHERE reading_id=? ORDER BY id', [$rid]) as $i => $p) {
+                $bytes = ImageProcessor::read((int) $u['id'], $p['file_name']);
+                if ($bytes === null || $total + strlen($bytes) > 15 * 1024 * 1024) {
+                    continue;
+                }
+                $total += strlen($bytes);
+                $attach[] = ['zaehlerstand-' . $readAt . '-' . ($i + 1) . '.jpg', 'image/jpeg', $bytes];
+            }
+            $body = '<p>Hallo ' . e($u['name']) . ',</p>'
+                . '<p>du hast soeben einen neuen Zählerstand erfasst. Bitte trage ihn zusätzlich bei deinem <b>Netzbetreiber</b> ein bzw. melde ihn dort'
+                . ($attach ? ' – die Fotos des Zählers findest du im Anhang.' : '.') . '</p>'
+                . '<p style="margin:0 0 4px"><b>' . e($mName) . '</b>' . ($mLoc !== '' ? ' · ' . e($mLoc) : '') . '<br>'
+                . 'Ablesung vom ' . e($date) . ' · ' . e($label) . '</p>'
+                . '<ul>' . $rows . '</ul>'
+                . ($note !== '' ? '<p style="color:#6b7785">Notiz: ' . e($note) . '</p>' : '')
+                . Mailer::button(abs_url('meters/' . $m['id']), 'Zähler in meterio öffnen')
+                . '<p style="font-size:12px;color:#6b7785">Die Voreinstellung für diese E-Mail kannst du in deinem Profil ändern.</p>';
+            $html = Mailer::wrap('Neuer Zählerstand ⚡', $body);
+            return Mailer::send($u['email'], 'Neuer Zählerstand ' . $mName . ' (' . $date . ')', $html, null, $attach);
+        } catch (Throwable $e) {
+            error_log('[meterio notify] ' . $e->getMessage());
+            return false;
+        }
     }
 
     private function savePhotos(int $uid, int $readingId): void

@@ -15,6 +15,11 @@ if ($configMissing || (string) Config::get('key', '') === '') {
 
 $r = new Router();
 
+// Rechtliches & Versionen
+$r->get('/impressum', ['PageController', 'impressum']);
+$r->get('/datenschutz', ['PageController', 'privacy']);
+$r->get('/changelog', ['PageController', 'changelog']);
+
 // Auth
 $r->get('/', ['DashboardController', 'home']);
 $r->get('/setup', ['AuthController', 'setupForm']);
@@ -57,12 +62,14 @@ $r->get('/meters', ['MeterController', 'index']);
 $r->get('/meters/new', ['MeterController', 'create']);
 $r->post('/meters', ['MeterController', 'store']);
 $r->get('/meters/{id}', ['MeterController', 'show']);
+$r->get('/meters/{id}/stats', ['MeterController', 'stats']);
 $r->get('/meters/{id}/edit', ['MeterController', 'edit']);
 $r->post('/meters/{id}', ['MeterController', 'update']);
 $r->post('/meters/{id}/delete', ['MeterController', 'delete']);
 
 // Ablesungen & Fotos
 $r->get('/meters/{id}/readings/new', ['ReadingController', 'create']);
+$r->post('/meters/{id}/readings/check', ['ReadingController', 'check']);
 $r->post('/meters/{id}/readings', ['ReadingController', 'store']);
 $r->get('/readings/{id}/edit', ['ReadingController', 'edit']);
 $r->post('/readings/{id}', ['ReadingController', 'update']);

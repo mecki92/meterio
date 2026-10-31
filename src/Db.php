@@ -21,21 +21,32 @@ final class Db
         return self::$pdo;
     }
 
-    /** Einfache Auto-Migration für bestehende Installationen (einmalig, Marker-Datei in storage/). */
+    /** Einfache Auto-Migration für bestehende Installationen (einmalig je Änderung, Marker-Dateien in storage/). */
     private static function migrate(PDO $pdo): void
     {
-        $marker = ROOT . '/storage/.migrated_reading_reason';
-        if (is_file($marker)) {
-            return;
-        }
-        try {
-            $has = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'readings' AND COLUMN_NAME = 'reason'")->fetchColumn();
-            if (!$has) {
-                $pdo->exec("ALTER TABLE readings ADD COLUMN reason VARCHAR(20) NOT NULL DEFAULT 'regular' AFTER read_at");
+        $steps = [
+            'reading_reason' => ['readings', 'reason', "ALTER TABLE readings ADD COLUMN reason VARCHAR(20) NOT NULL DEFAULT 'regular' AFTER read_at"],
+            'notify_reading' => ['users', 'notify_reading', "ALTER TABLE users ADD COLUMN notify_reading TINYINT(1) NOT NULL DEFAULT 1 AFTER last_reminder_at"],
+            'reminder_month_end' => ['users', 'reminder_mode', "ALTER TABLE users MODIFY reminder_mode ENUM('off','monthly','month_end','contract_year') NOT NULL DEFAULT 'monthly'", 'month_end'],
+        ];
+        foreach ($steps as $name => $step) {
+            [$table, $col, $sql] = $step;
+            $needle = $step[3] ?? null;
+            $marker = ROOT . '/storage/.migrated_' . $name;
+            if (is_file($marker)) {
+                continue;
             }
-            @file_put_contents($marker, date('c'));
-        } catch (Throwable $e) {
-            error_log('meterio migrate: ' . $e->getMessage());
+            try {
+                $st = $pdo->prepare("SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?");
+                $st->execute([$table, $col]);
+                $type = $st->fetchColumn();
+                if ($type === false || ($needle !== null && !str_contains((string) $type, $needle))) {
+                    $pdo->exec($sql);
+                }
+                @file_put_contents($marker, date('c'));
+            } catch (Throwable $e) {
+                error_log('meterio migrate ' . $name . ': ' . $e->getMessage());
+            }
         }
     }
 

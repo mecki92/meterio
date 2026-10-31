@@ -51,14 +51,13 @@ if ($analog) { $regs = [['id' => 0, 'obis' => '', 'label' => '', 'tariff' => 'ET
 
     <!-- Digital: OBIS-Register, jede Kennzahl nur einmal -->
     <div class="card mb-3" id="digitalbox" <?= $analog ? 'hidden' : '' ?>>
-        <div class="card-header split"><span><i class="bi bi-list-ol"></i> Register (OBIS-Kennzahlen)</span>
+        <div class="card-header split"><span><i class="bi bi-list-ol"></i> Register (OBIS-Kennzahlen)<?= info('Du bestimmst selbst, was jedes Register bedeutet. Die Zuordnung „Abrechnung“ steuert, mit welchem Preis der Vertrag das Register bewertet. Jede OBIS-Kennzahl darf nur einmal vorkommen.') ?></span>
             <span class="d-flex flex-wrap gap-2">
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-preset="single">Eintarif (1.8.0)</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-preset="multi">HT/NT (1.8.1 + 1.8.2)</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-preset="export">+ Einspeisung (2.8.0)</button>
             </span></div>
         <div class="card-body">
-            <p class="small text-body-secondary">Du bestimmst selbst, was jedes Register bedeutet. Die Zuordnung „Abrechnung“ steuert, mit welchem Preis der Vertrag das Register bewertet. <b>Jede OBIS-Kennzahl darf nur einmal vorkommen.</b></p>
             <div class="regrow reghead" aria-hidden="true"><span>OBIS</span><span>Bezeichnung</span><span>Abrechnung</span><span></span></div>
             <div id="regs" data-tariffs="<?= e(json_encode(tariff_labels(), JSON_UNESCAPED_UNICODE)) ?>" <?= $analog ? 'data-disabled="1"' : '' ?>>
                 <?php foreach ($regs as $i => $r): ?>
@@ -102,7 +101,7 @@ if ($analog) { $regs = [['id' => 0, 'obis' => '', 'label' => '', 'tariff' => 'ET
         <div class="card-body">
             <div class="form-check form-switch mb-0">
                 <input class="form-check-input" type="checkbox" role="switch" name="archived" id="arch" value="1" <?= $meter['archived'] ? 'checked' : '' ?>>
-                <label class="form-check-label" for="arch"><b>Zähler archivieren</b><br><small class="text-body-secondary">Wird auf dem Dashboard ausgeblendet; Daten bleiben erhalten.</small></label>
+                <label class="form-check-label" for="arch"><b>Zähler archivieren</b><?= info('Wird auf dem Dashboard ausgeblendet; Daten bleiben erhalten.') ?></label>
             </div>
         </div>
     </div>

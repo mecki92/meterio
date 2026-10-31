@@ -99,7 +99,7 @@ final class DashboardController
                 $b = min($s->modify('+' . ($i + 1) . ' months')->getTimestamp(), $yr['end_ex']);
                 $buckets[] = [$months[(int) $a->format('n') - 1] . ' ' . $a->format('y'), $a->getTimestamp(), $b];
             }
-            $title = 'Vertragsjahr ' . $yr['label'];
+            $title = period_word($c) . ' ' . $yr['label'];
         } else {
             $year = (int) ($_GET['ref'] ?? date('Y'));
             $year = ($year >= 2000 && $year <= 2100) ? $year : (int) date('Y');
@@ -187,7 +187,8 @@ final class DashboardController
         $forecast = [];
         $anchorIdx = null;
         $paidTotal = 0.0;
-        $advance = $c['data']['monthly_advance'] !== null ? (float) $c['data']['monthly_advance'] : null;
+        $bonusList = Calc::bonusPayments($c, $yr['index']);
+        $advance = Calc::advanceAt($c, time());
         foreach ($ts as $i => $t) {
             if ($sum['has_data'] && $t <= $sum['accrual_to']) {
                 $accrued[$i] = round(Calc::cost($c, $m['registers'], $series, $yr['start'], $t, $yr['index'])['total'], 2);
@@ -197,8 +198,13 @@ final class DashboardController
             }
             $p = 0.0;
             foreach ($payments as $pay) {
-                if ($pay['data']['status'] === 'paid' && strtotime($pay['paid_on']) >= $yr['start'] && strtotime($pay['paid_on']) < $t + 86400) {
+                if ($pay['data']['status'] === 'paid' && Calc::paymentPeriod($c, $pay) === $yr['index'] && max(strtotime($pay['paid_on']), $yr['start']) < $t + 86400) {
                     $p += (float) $pay['data']['amount'];
+                }
+            }
+            foreach ($bonusList as $bp) {   // Bonuszahlung zählt ab ihrem Buchungstag
+                if ($bp['ts'] < $t + 86400) {
+                    $p += $bp['amount'];
                 }
             }
             if ($t <= $now) {
@@ -220,7 +226,17 @@ final class DashboardController
         if ($advance !== null && $lastPaidIdx !== null) {
             $expected[$lastPaidIdx] = $paidCum[$lastPaidIdx];
             for ($i = $lastPaidIdx + 1; $i < count($ts); $i++) {
-                $expected[$i] = round($paidCum[$lastPaidIdx] + $advance * ($i - $lastPaidIdx), 2);
+                $bonusAdd = 0.0;
+                foreach ($bonusList as $bp) {   // noch nicht gebuchte Boni, die bis zu diesem Punkt fällig sind
+                    if ($bp['ts'] < $ts[$i] + 86400 && $bp['ts'] >= $ts[$lastPaidIdx] + 86400) {
+                        $bonusAdd += $bp['amount'];
+                    }
+                }
+                $advCum = 0.0;
+                for ($j = $lastPaidIdx + 1; $j <= $i; $j++) {   // Abschläge ggf. mit geändertem Betrag ab Stichtag
+                    $advCum += Calc::advanceAt($c, $ts[$j]) ?? 0.0;
+                }
+                $expected[$i] = round($paidCum[$lastPaidIdx] + $advCum + $bonusAdd, 2);
             }
         }
         // Prognose-Linie
@@ -235,7 +251,7 @@ final class DashboardController
             }
         }
         return [
-            'title' => 'Kosten vs. Abschläge – Vertragsjahr ' . $yr['label'], 'unit' => '€', 'labels' => $labels,
+            'title' => 'Kosten vs. Abschläge – ' . period_word($c) . ' ' . $yr['label'], 'unit' => '€', 'labels' => $labels,
             'datasets' => [
                 ['label' => 'Aufgelaufene Realkosten', 'data' => $accrued],
                 ['label' => 'Prognose Realkosten', 'data' => $forecast, 'dashed' => true],

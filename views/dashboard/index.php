@@ -48,13 +48,13 @@
                  data-contract="<?= (int) ($activeContract['id'] ?? 0) ?>"
                  data-years="<?= e(json_encode($activeContract ? ($years[$activeContract['id']] ?? []) : [])) ?>">
                 <div class="btn-group" role="group">
-                    <?php if ($activeContract): ?><button type="button" data-range="contract" class="btn btn-primary btn-sm">Vertragsjahr</button><?php endif; ?>
+                    <?php if ($activeContract): ?><button type="button" data-range="contract" class="btn btn-primary btn-sm"><?= e(period_word($activeContract)) ?></button><?php endif; ?>
                     <button type="button" data-range="year" class="btn <?= $activeContract ? 'btn-outline-primary' : 'btn-primary' ?> btn-sm">Jahr</button>
                 </div>
                 <select id="refyear" class="form-select form-select-sm w-auto" aria-label="Jahr"<?= $activeContract ? ' hidden' : '' ?>>
                     <?php for ($y = (int) date('Y'); $y >= (int) date('Y') - 6; $y--): ?><option value="<?= $y ?>"><?= $y ?></option><?php endfor; ?>
                 </select>
-                <select id="refcy" class="form-select form-select-sm w-auto" aria-label="Vertragsjahr"<?= $activeContract ? '' : ' hidden' ?>></select>
+                <select id="refcy" class="form-select form-select-sm w-auto" aria-label="<?= $activeContract ? e(period_word($activeContract)) : 'Vertragsjahr' ?>"<?= $activeContract ? '' : ' hidden' ?>></select>
             </div>
         </div>
         <div class="card-body">
@@ -70,7 +70,7 @@
         <div class="card-header split"><span><i class="bi bi-graph-up"></i> Soll-Ist: Realkosten vs. Abschläge</span>
             <div class="chart-ctl" id="costctl" data-api="<?= e(url('api/chart')) ?>" data-contract="<?= (int) $activeContract['id'] ?>"
                  data-years="<?= e(json_encode($years[$activeContract['id']] ?? [])) ?>">
-                <select id="costcy" class="form-select form-select-sm w-auto" aria-label="Vertragsjahr"></select>
+                <select id="costcy" class="form-select form-select-sm w-auto" aria-label="<?= $activeContract ? e(period_word($activeContract)) : 'Vertragsjahr' ?>"></select>
             </div>
         </div>
         <div class="card-body">

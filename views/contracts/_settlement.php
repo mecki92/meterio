@@ -12,7 +12,7 @@ $codes = [];
     <div class="settle-head">
         <div>
             <div class="settle-kicker">Jahresabrechnung</div>
-            <h3 class="h5 mb-0">Vertragsjahr <?= (int) $yr['index'] ?> <span class="text-body-secondary fw-normal">· <?= e($yr['label']) ?></span></h3>
+            <h3 class="h5 mb-0"><?= e(period_word($c)) ?> <?= (int) $yr['index'] ?> <span class="text-body-secondary fw-normal">· <?= e($yr['label']) ?></span></h3>
         </div>
         <button type="button" class="btn btn-sm btn-outline-secondary no-print" onclick="window.print()"><i class="bi bi-printer"></i> Drucken</button>
     </div>
@@ -23,7 +23,7 @@ $codes = [];
 
     <div class="settle-kpis">
         <div><span>Energiekosten (brutto)</span><b><?= e(eur($st['total'])) ?></b></div>
-        <div><span>Geleistete Abschläge (<?= (int) $st['paid_count'] ?>)</span><b><?= e(eur($st['paid'])) ?></b></div>
+        <div><span>Abschläge (<?= (int) $st['paid_count'] ?>)<?= $st['bonus'] > 0 ? ' + Bonus' : '' ?></span><b><?= e(eur($st['paid'] + $st['bonus'])) ?></b></div>
         <div class="<?= $st['balance'] >= 0 ? 'is-plus' : 'is-minus' ?>"><span><?= $st['balance'] >= 0 ? 'Guthaben' : 'Nachzahlung' ?></span><b><?= $st['balance'] >= 0 ? '+' : '−' ?><?= e(eur(abs($st['balance']))) ?></b></div>
     </div>
 
@@ -40,7 +40,7 @@ $codes = [];
                         <td class="text-nowrap"><?= e($dt($r['from'])) ?> – <?= e($dt($r['to'] - ($r['to'] === $yr['end_ex'] ? 86400 : 0))) ?></td>
                         <td class="num"><?= e($kw($r['v0'])) ?><?= $r['est0'] ? '<sup>*</sup>' : '' ?></td>
                         <td class="num"><?= e($kw($r['v1'])) ?><?= $r['est1'] ? '<sup>*</sup>' : '' ?></td>
-                        <td><?php if ($r['why'] === 'prorata'): ?><span class="chip chip-muted">anteilig</span><?php else: $rs = $reasons[$r['why']] ?? ['Ablesung', 'secondary']; if (isset($rs[2])) { $codes[$rs[2]] = $rs[0]; } ?><span class="chip chip-<?= e($rs[1]) ?>" title="<?= e($rs[0]) ?>"><?= e($rs[2] ?? $rs[0]) ?></span><?php endif; ?></td>
+                        <td><?php if ($r['why'] === 'prorata'): ?><span class="chip chip-muted">anteilig</span><?php else: $rs = $reasons[$r['why']] ?? ['Ablesung', 'secondary']; ?><span class="chip chip-<?= e($rs[1]) ?>" title="<?= e($rs[0]) ?>"><?= e($rs[0]) ?></span><?php endif; ?></td>
                         <td class="num fw-semibold"><?= e($kw($r['kwh'])) ?> kWh</td>
                     </tr>
                 <?php endforeach; ?>
@@ -51,7 +51,6 @@ $codes = [];
         </div>
     <?php endforeach; ?>
     <p class="small text-body-secondary mb-1"><sup>*</sup> anteilig aus den benachbarten Ablesungen berechnet (lineare Verteilung).</p>
-    <?php ksort($codes); if ($codes): ?><p class="small text-body-secondary">Ablesearten: <?php foreach ($codes as $cd => $lb): ?><span class="me-3"><b><?= e($cd) ?></b> = <?= e(preg_replace('/^[A-Z]\d · /u', '', $lb)) ?></span><?php endforeach; ?></p><?php endif; ?>
 
     <h4 class="settle-title"><i class="bi bi-coin"></i> Ihre Kosten für Strom im Detail</h4>
     <div class="table-responsive settle-table">
@@ -59,7 +58,7 @@ $codes = [];
             <thead><tr><th>Position</th><th>Zeitraum</th><th class="num">Menge</th><th class="num">Preis</th><th class="num">Betrag</th></tr></thead>
             <tbody>
             <?php foreach ($st['lines'] as $l): ?>
-                <tr><td>Arbeitspreis <?= e($tl[$l['tariff']] ?? $l['tariff']) ?></td><td class="text-nowrap small text-body-secondary"><?= e($dt($yr['start'])) ?> – <?= e($dt($yr['end_ex'] - 86400)) ?></td><td class="num"><?= e($kw($l['kwh'])) ?> kWh</td><td class="num"><?= e(price($l['price'])) ?> ct/kWh</td><td class="num"><?= e(eur($l['amount'])) ?></td></tr>
+                <tr><td>Arbeitspreis <?= e($tl[$l['tariff']] ?? $l['tariff']) ?></td><td class="text-nowrap small text-body-secondary"><?= e($dt($l['from'])) ?> – <?= e($dt($l['to'] - 86400)) ?></td><td class="num"><?= e($kw($l['kwh'])) ?> kWh</td><td class="num"><?= e(price($l['price'])) ?> ct/kWh</td><td class="num"><?= e(eur($l['amount'])) ?></td></tr>
             <?php endforeach; ?>
             <?php foreach ($st['base']['segments'] as $sg): ?>
                 <tr><td>Grundpreis</td><td class="text-nowrap small text-body-secondary"><?= e($dt($sg['from'])) ?> – <?= e($dt($sg['to'] - 86400)) ?></td><td class="num"><?= e($nd($sg['days'])) ?> von <?= (int) $sg['diy'] ?> Tagen</td><td class="num"><?= e(price($sg['per_year'])) ?> €/Jahr</td><td class="num"><?= e(eur($sg['amount'])) ?></td></tr>
@@ -73,14 +72,14 @@ $codes = [];
             <?php if ($st['feedin']): ?>
                 <tr class="sub"><td colspan="2">Einspeisevergütung</td><td class="num"><?= e($kw($st['feedin']['kwh'])) ?> kWh</td><td class="num"><?= e(price($st['feedin']['price'])) ?> ct/kWh</td><td class="num">− <?= e(eur($st['feedin']['amount'])) ?></td></tr>
             <?php endif; ?>
-            <?php foreach ($st['credits'] as $cr): ?>
-                <tr class="sub"><td colspan="4">Gutschrift<?= $cr['label'] !== '' ? ' ' . e($cr['label']) : '' ?> (nach <?= (int) $cr['months'] ?> Monaten)</td><td class="num">− <?= e(eur($cr['amount'])) ?></td></tr>
-            <?php endforeach; ?>
                 <tr class="total"><td colspan="4">Ihre Energiekosten (brutto)</td><td class="num"><?= e(eur($st['total'])) ?></td></tr>
             <?php if (!$st['net_basis']): ?>
                 <tr class="sub small"><td colspan="4">darin enthalten USt <?= e(nf($st['vat_pct'], 0)) ?> %</td><td class="num"><?= e(eur($st['vat'])) ?></td></tr>
             <?php endif; ?>
                 <tr class="sub"><td colspan="4">Geleistete Abschläge (<?= (int) $st['paid_count'] ?>)</td><td class="num">− <?= e(eur($st['paid'])) ?></td></tr>
+            <?php foreach ($st['credits'] as $cr): ?>
+                <tr class="sub"><td colspan="4"><i class="bi bi-gift"></i> Bonuszahlung<?= $cr['label'] !== '' ? ' ' . e($cr['label']) : '' ?> (nach <?= (int) $cr['months'] ?> Monaten, gebucht <?= e(date('d.m.Y', $cr['ts'])) ?>)</td><td class="num">− <?= e(eur($cr['amount'])) ?></td></tr>
+            <?php endforeach; ?>
                 <tr class="result <?= $st['balance'] >= 0 ? 'plus' : 'minus' ?>"><td colspan="4"><?= $st['balance'] >= 0 ? 'Guthaben' : 'Nachzahlung' ?></td><td class="num"><?= e(eur(abs($st['balance']))) ?></td></tr>
             </tfoot>
         </table>

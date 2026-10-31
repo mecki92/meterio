@@ -7,6 +7,7 @@ $kw = static fn(float $v) => number_format($v, 0, ',', '.');
     <h2 class="h3 m-0"><?= e($meter['name']) ?><?php if ($meter['archived']): ?> <span class="chip chip-muted align-middle ms-2">archiviert</span><?php endif; ?></h2>
     <div class="d-flex gap-2">
         <a class="btn btn-primary" href="<?= e(url('meters/' . $meter['id'] . '/readings/new')) ?>"><i class="bi bi-plus-lg"></i> Ablesung</a>
+        <a class="btn btn-outline-secondary" href="<?= e(url('meters/' . $meter['id'] . '/stats')) ?>"><i class="bi bi-bar-chart-line"></i> Statistik</a>
         <a class="btn btn-outline-secondary" href="<?= e(url('meters/' . $meter['id'] . '/edit')) ?>">Bearbeiten</a>
     </div>
 </div>
