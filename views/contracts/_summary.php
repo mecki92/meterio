@@ -99,8 +99,7 @@ if ($done && $sum['balance_now'] !== null) {
                     <div class="k-sub"><?= $done ? 'bis' : 'Stand' ?> <?= e(date('d.m.Y', $done ? $doneTs : $sum['accrual_to'])) ?></div></div></div>
             <?php endif; ?>
             <div class="col"><div class="kpi"><div class="k-label"><i class="bi bi-wallet2"></i> Abschläge bezahlt</div>
-                <div class="k-val"><?= e(eur($sum['paid'])) ?></div><div class="k-sub"><?= (int) $sum['paid_count'] ?> Zahlung(en)<?= $sum['bonus_received'] > 0 ? ' · + Bonus ' . e(eur($sum['bonus_received'])) : '' ?>
-                    <?php foreach ($sum['credits_pending'] as $cp): ?><br><i class="bi bi-hourglass-split"></i> Bonus <?= e(eur($cp['amount'])) ?> am <?= e(date('d.m.Y', $cp['ts'])) ?> erwartet<?php endforeach; ?></div></div></div>
+                <div class="k-val"><?= e(eur($sum['paid'])) ?></div><div class="k-sub"><?= (int) $sum['paid_count'] ?> Zahlung(en)<?= $sum['bonus_received'] > 0 ? ' · + Bonus ' . e(eur($sum['bonus_received'])) : '' ?></div></div></div>
             <?php if ($k): ?>
                 <div class="col"><div class="kpi"><div class="k-label"><i class="bi bi-lightning-charge"></i> <?= $done ? 'Verbrauch gesamt' : 'Verbrauch bisher' ?></div>
                     <div class="k-val"><?= e(nf($k['ET'] + $k['HT'] + $k['NT'], 0)) ?> kWh</div>

@@ -434,23 +434,39 @@
     var nfmt = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 });
     var TARIFF_NAME = { ET: 'Verbrauch', HT: 'Verbrauch HT', NT: 'Verbrauch NT', EXPORT: 'Einspeisung' };
 
-    /* Summenwerte über den Balken (ohne Zusatz-Bibliothek) */
+    /* Summenwerte in den Balken und Soll-Linie über die volle Breite, vor den Balken gezeichnet (ohne Zusatz-Bibliothek) */
     var totalsPlugin = {
       id: 'mbTotals',
       afterDatasetsDraw: function (chart) {
-        var n = chart.data.labels.length, w = chart.chartArea.right - chart.chartArea.left;
+        var ca = chart.chartArea, ctx = chart.ctx, y = chart.scales.y;
+        // Soll-Linie: über die gesamte Diagrammbreite, oberhalb der Balken
+        chart.data.datasets.forEach(function (ds, di) {
+          if (!ds._target || !chart.isDatasetVisible(di)) { return; }
+          var py = y.getPixelForValue(ds._target);
+          if (py < ca.top || py > ca.bottom) { return; }
+          ctx.save();
+          ctx.beginPath(); ctx.setLineDash([6, 4]); ctx.lineWidth = 2; ctx.strokeStyle = '#f59e0b';
+          ctx.moveTo(ca.left, py); ctx.lineTo(ca.right, py); ctx.stroke();
+          ctx.restore();
+        });
+        // Summen innerhalb der Balken (nur wenn der Balken hoch genug ist)
+        var n = chart.data.labels.length, w = ca.right - ca.left;
         if (w / n < 30) { return; }
-        var ctx = chart.ctx, y = chart.scales.y, meta = chart.getDatasetMeta(0);
+        var meta = chart.getDatasetMeta(0), base = y.getPixelForValue(0), cur = chart.options.mbCurrent;
         ctx.save();
         ctx.font = '600 ' + (w / n < 40 ? 10 : 11) + 'px system-ui, sans-serif';
-        ctx.fillStyle = textColor(); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
         for (var i = 0; i < n; i++) {
           var sum = 0, has = false;
           chart.data.datasets.forEach(function (ds, di) {
             if (ds.type === 'line' || ds.tariff === 'EXPORT' || !chart.isDatasetVisible(di)) { return; }
             if (ds.data[i] != null) { sum += ds.data[i]; has = true; }
           });
-          if (has && sum > 0 && meta.data[i]) { ctx.fillText(nfmt.format(sum), meta.data[i].x, y.getPixelForValue(sum) - 4); }
+          if (!has || sum <= 0 || !meta.data[i]) { continue; }
+          var top = y.getPixelForValue(sum);
+          if (base - top < 22) { continue; }   // zu niedrig: Wert steht im Tooltip
+          ctx.fillStyle = i === cur ? textColor() : '#ffffff';
+          ctx.fillText(nfmt.format(sum), meta.data[i].x, top + 5);
         }
         ctx.restore();
       }
@@ -480,8 +496,9 @@
           };
         });
         if (d.target) {
-          sets.push({ type: 'line', label: d.target_label, data: d.labels.map(function () { return d.target; }), borderColor: '#f59e0b', backgroundColor: '#f59e0b',
-            borderDash: [6, 4], borderWidth: 2, pointRadius: 0, pointHoverRadius: 0, fill: false, order: 0, stack: 'target', _any: false });
+          // Die Linie selbst zeichnet das Plugin (volle Breite, über den Balken); der Datensatz liefert Legende und Tooltip
+          sets.push({ type: 'line', label: d.target_label, data: d.labels.map(function () { return d.target; }), borderColor: 'rgba(245,158,11,0)', backgroundColor: '#f59e0b',
+            borderWidth: 0, pointRadius: 0, pointHoverRadius: 0, fill: false, order: 0, stack: 'target', _any: false, _target: d.target });
         }
         var any = sets.some(function (s) { return s._any; });
         $('#usageempty').hidden = any;
@@ -511,7 +528,7 @@
           data: { labels: d.labels, datasets: sets },
           plugins: [totalsPlugin],
           options: {
-            responsive: true, maintainAspectRatio: false,
+            responsive: true, maintainAspectRatio: false, mbCurrent: d.current,
             layout: { padding: { top: 6 } },
             interaction: { mode: 'index', intersect: false },
             scales: {

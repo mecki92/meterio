@@ -5,21 +5,20 @@ $kw = static fn(float $v) => number_format($v, 0, ',', '.');
 $isOwner = ($meter['access'] ?? 'owner') === 'owner';
 $canWrite = $isOwner || ($meter['access'] ?? '') === 'write';
 ?>
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+<div class="page-head">
     <h2 class="h3 m-0"><?= e($meter['name']) ?><?php if ($meter['archived']): ?> <span class="chip chip-muted align-middle ms-2">archiviert</span><?php endif; ?></h2>
-    <div class="d-flex gap-2">
-        <?php if ($canWrite): ?><a class="btn btn-primary" href="<?= e(url('meters/' . $meter['id'] . '/readings/new')) ?>"><i class="bi bi-plus-lg"></i> Ablesung</a><?php endif; ?>
+    <div class="actions">
         <a class="btn btn-outline-secondary" href="<?= e(url('meters/' . $meter['id'] . '/stats')) ?>"><i class="bi bi-bar-chart-line"></i> Statistik</a>
         <?php if ($isOwner): ?><a class="btn btn-outline-secondary" href="<?= e(url('meters/' . $meter['id'] . '/edit')) ?>">Bearbeiten</a><?php endif; ?>
     </div>
 </div>
 <?php if (!$isOwner): ?>
-<div class="alert alert-info py-2 small d-flex flex-wrap justify-content-between align-items-center gap-2">
+<div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
     <span><i class="bi bi-people"></i> Freigegeben von <b><?= e($meter['owner_name']) ?></b> · <?= $canWrite ? 'du kannst Zählerstände erfassen' : 'nur Ansicht' ?>. Verträge und Kosten sind nicht freigegeben.</span>
     <form method="post" action="<?= e(url('meters/' . $meter['id'] . '/leave')) ?>" class="m-0" data-confirm="Freigabe verlassen? Du siehst den Zähler danach nicht mehr."><?= csrf_field() ?><button class="btn btn-sm btn-outline-secondary" type="submit">Freigabe verlassen</button></form>
 </div>
 <?php endif; ?>
-<div class="d-flex flex-wrap gap-2 align-items-center mb-3 small">
+<div class="d-flex flex-wrap gap-2 align-items-center mb-4 small">
     <span class="chip"><i class="bi <?= $meter['kind'] === 'analog' ? 'bi-speedometer' : 'bi-cpu' ?>"></i> <?= $meter['kind'] === 'analog' ? 'Analog' : 'Digital (OBIS)' ?></span>
     <?php if ($meter['location'] !== ''): ?><span class="chip"><i class="bi bi-geo-alt"></i> <?= e($meter['location']) ?></span><?php endif; ?>
     <?php foreach ($meter['registers'] as $r): ?><span class="chip chip-<?= $r['tariff'] === 'EXPORT' ? 'success' : 'primary' ?>" title="<?= e(tariff_labels()[$r['tariff']] ?? $r['tariff']) ?>"><?= e($r['label']) ?><?= $r['obis'] !== '' ? ' · ' . e($r['obis']) : '' ?> <b><?= e($r['tariff']) ?></b></span><?php endforeach; ?>
@@ -60,8 +59,8 @@ $canWrite = $isOwner || ($meter['access'] ?? '') === 'write';
         </button>
         <div class="collapse <?= $open ? 'show' : '' ?>" id="yr-<?= $y ?>">
     <div class="table-responsive pay-table">
-    <table class="table table-hover align-middle mb-0">
-        <thead><tr><th>Datum</th><?php foreach ($meter['registers'] as $r): ?><th class="num"><?= e($r['label']) ?><?= $r['obis'] !== '' ? '<br><small class="fw-normal text-body-secondary text-lowercase">' . e($r['obis']) . '</small>' : '' ?></th><?php endforeach; ?><th class="d-none d-md-table-cell">Anlass</th><th>Fotos</th><th></th></tr></thead>
+    <table class="table table-hover align-middle mb-0 reading-table">
+        <thead><tr><th class="c-date">Datum</th><?php foreach ($meter['registers'] as $r): ?><th class="num"><?= e($r['label']) ?><?= $r['obis'] !== '' ? '<br><small class="fw-normal text-body-secondary text-lowercase">' . e($r['obis']) . '</small>' : '' ?></th><?php endforeach; ?><th class="d-none d-md-table-cell c-reason">Anlass</th><th class="c-photos">Fotos</th><th class="c-edit"></th></tr></thead>
         <tbody>
         <?php foreach ($g['rows'] as [$rd, $prev]):
             [$rl, $rc] = $reasons[$rd['reason']] ?? ['Sonstiges', 'secondary']; ?>

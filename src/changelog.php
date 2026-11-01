@@ -10,8 +10,12 @@ return [
         'version' => '1.0.1', 'date' => '2026-11-01', 'title' => 'Fotos an den Eigentümer, HT/NT-Kachel & Schlussstand',
         'items' => [
             ['imp', 'Geteilte Zähler: Liest ein Mitnutzer ab, bekommt der Eigentümer die E-Mail mit den Fotos und der Erinnerung für den Netzbetreiber. Der Mitnutzer erhält eine Info-Mail mit dem Zählerstand.'],
+            ['imp', 'Zählerseite: Ablesetabellen aller Jahre haben gleiche Spaltenbreiten, der doppelte Button „Ablesung“ oben entfällt und der Hinweis zur Freigabe ist luftiger.'],
+            ['imp', 'Die Kachel „Abschläge bezahlt“ zeigt keinen erwarteten Bonus mehr; er steht weiter in der Zahlungsliste des Vertrags.'],
+            ['imp', 'Verbrauchsdiagramm: Die Soll-Linie läuft über die volle Breite und liegt über den Balken, die Werte stehen in den Balken.'],
             ['imp', 'HT/NT-Zähler: Die blaue Zählerkachel zeigt beide Zählwerke mit dem jeweiligen Verbrauch seit der letzten Ablesung.'],
             ['fix', 'Abrechnung: Eine Ablesung am letzten Liefertag gilt als Schlussstand zum Vertragsende. Der Rest des Tages wird nicht mehr aus einer späteren Ablesung hochgerechnet, die überflüssige „anteilig“-Zeile entfällt.'],
+            ['fix', 'Zahlungen nach Vertragsende (z. B. Raten für eine Nachzahlung im Folgejahr) werden dem letzten Abrechnungszeitraum zugeordnet, angezeigt und mit der Schlussabrechnung verrechnet.'],
         ],
     ],
     [

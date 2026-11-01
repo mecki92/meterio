@@ -171,7 +171,7 @@ final class Calc
 
     /**
      * Abrechnungszeitraum einer Zahlung: manuell zugeordnet (data.period) oder nach Datum.
-     * 0 = vor Vertragsbeginn, 9999 = nach Vertragsende.
+     * 0 = vor Vertragsbeginn; nach Vertragsende = letzter Abrechnungszeitraum.
      */
     public static function paymentPeriod(array $contract, array $payment): int
     {
@@ -184,7 +184,7 @@ final class Calc
             return 0;
         }
         if (!empty($contract['end_date']) && $t >= strtotime($contract['end_date'] . ' +1 day')) {
-            return 9999;
+            return self::maxPeriod($contract);   // Zahlungen nach Vertragsende (z. B. Raten für eine Nachzahlung) gehören zur Schlussabrechnung
         }
         return self::contractYear($contract, $t)['index'];
     }

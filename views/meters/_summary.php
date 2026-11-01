@@ -26,13 +26,13 @@ $agoTxt = $ago === null ? '' : ($ago === 0 ? 'heute' : ($ago === 1 ? 'gestern' :
         <div class="kpi-hero">
             <div>
                 <?php if ($last && $hero): ?>
-                    <div class="<?= count($hero) > 1 ? 'row g-2' : '' ?>">
-                    <?php foreach ($hero as $h): ?>
-                        <div class="<?= count($hero) > 1 ? 'col-6' : '' ?>">
+                    <div>
+                    <?php foreach ($hero as $i => $h): ?>
+                        <div class="<?= $i > 0 ? 'mt-2' : '' ?>">
                             <div class="k-label"><i class="bi bi-speedometer2"></i> <?= e(Repo::registerTitle($h['reg'])) ?></div>
                             <?php if ($h['value'] !== null): ?>
-                                <div class="k-val<?= count($hero) > 1 ? ' k-val-sm' : '' ?>"><?= e($kw($h['value'])) ?> kWh</div>
-                            <?php else: ?><div class="k-val<?= count($hero) > 1 ? ' k-val-sm' : '' ?>">–</div><?php endif; ?>
+                                <div class="k-val"><?= e($kw($h['value'])) ?> kWh</div>
+                            <?php else: ?><div class="k-val">–</div><?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                     </div>
