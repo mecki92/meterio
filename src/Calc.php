@@ -403,6 +403,35 @@ final class Calc
         return ['years' => $years, 'months' => $months, 'total' => $total, 'span_days' => ($last - $first) / 86400, 'has_data' => (bool) $years];
     }
 
+    /**
+     * Vertragsende: Eine Ablesung am letzten Liefertag gilt als Schlussstand (Stand zum Lieferende) – wie in der Schlussrechnung des Lieferanten.
+     * Ohne diesen Schritt würde der Rest des letzten Tages (bis 24 Uhr) aus der nächsten, späteren Ablesung hochgerechnet.
+     */
+    public static function closeSeries(array $contract, array $series): array
+    {
+        $end = (string) ($contract['end_date'] ?? '');
+        if ($end === '') {
+            return $series;
+        }
+        $t0 = strtotime($end);
+        $t1 = (new DateTimeImmutable($end))->modify('+1 day')->getTimestamp();
+        foreach ($series as $rid => $pts) {
+            $hasDay = false;
+            $hasEnd = false;
+            $val = null;
+            foreach ($pts as [$t, $v]) {
+                if ($t === $t0) { $hasDay = true; $val = $v; }
+                if ($t > $t0 && $t <= $t1) { $hasEnd = true; }
+            }
+            if ($hasDay && !$hasEnd) {
+                $pts[] = [$t1, $val];
+                usort($pts, static fn($a, $b) => $a[0] <=> $b[0]);
+                $series[$rid] = $pts;
+            }
+        }
+        return $series;
+    }
+
     /** Interpolierter Zählerstand zum Zeitpunkt $t (null außerhalb der Ablesungen). */
     public static function valueAt(array $s, int $t): ?float
     {
@@ -442,6 +471,7 @@ final class Calc
      */
     public static function settlement(array $contract, array $registers, array $series, array $payments, array $yr, array $rtsReason): array
     {
+        $series = self::closeSeries($contract, $series);
         $d = $contract['data'];
         $from = $yr['start'];
         $to = $yr['end_ex'];
@@ -470,6 +500,11 @@ final class Calc
             }
             if ($ve !== null) {
                 $pts[] = [$to, $ve, !$endExact, $endExact ? ($rtsReason[$to] ?? 'regular') : 'prorata'];
+            }
+            // Schlussstand am letzten Liefertag: keine zusätzliche 0-kWh-Zeile bis 24 Uhr
+            $n = count($pts);
+            if ($n >= 2 && $pts[$n - 1][0] === $to && !$pts[$n - 1][2] && $to - $pts[$n - 2][0] <= 90000 && $pts[$n - 2][1] === $pts[$n - 1][1] && !$pts[$n - 2][2]) {
+                array_pop($pts);
             }
             $rows = [];
             $sum = 0.0;
@@ -603,6 +638,7 @@ final class Calc
      */
     public static function cost(array $contract, array $registers, array $series, int $from, int $to, ?int $yearIndex = null): array
     {
+        $series = self::closeSeries($contract, $series);
         $kwh = ['ET' => 0.0, 'HT' => 0.0, 'NT' => 0.0, 'EXPORT' => 0.0];
         $regs = [];
         foreach ($registers as $r) {
@@ -634,6 +670,7 @@ final class Calc
      */
     public static function summary(array $contract, array $registers, array $series, array $payments, ?int $now = null, ?int $periodIndex = null): array
     {
+        $series = self::closeSeries($contract, $series);
         $now ??= time();
         $d = $contract['data'];
         $yr = $periodIndex ? self::periodInfo($contract, $periodIndex) : self::contractYear($contract, $now);

@@ -40,7 +40,7 @@ $maxMb = (int) Config::get('uploads.max_size_mb', 12);
                     <?php if ($isNew): ?>
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" role="switch" name="notify" id="notify" value="1" <?= !empty($form['notify']) ? 'checked' : '' ?>>
-                        <label class="form-check-label" for="notify">Per E-Mail zusenden<?= info('Du erhältst den Zählerstand samt Fotos per E-Mail, z. B. um ihn beim Netzbetreiber einzutragen.') ?></label>
+                        <label class="form-check-label" for="notify">Per E-Mail zusenden<?= info(($meter['access'] ?? 'owner') === 'owner' ? 'Du erhältst den Zählerstand samt Fotos per E-Mail, z. B. um ihn beim Netzbetreiber einzutragen.' : 'Du erhältst eine Info-Mail mit dem Zählerstand. Der Eigentümer des Zählers bekommt immer die Mail mit den Fotos.') ?></label>
                     </div>
                     <?php endif; ?>
                 </div>

@@ -7,6 +7,14 @@ declare(strict_types=1);
  */
 return [
     [
+        'version' => '1.0.1', 'date' => '2026-11-01', 'title' => 'Fotos an den Eigentümer, HT/NT-Kachel & Schlussstand',
+        'items' => [
+            ['imp', 'Geteilte Zähler: Liest ein Mitnutzer ab, bekommt der Eigentümer die E-Mail mit den Fotos und der Erinnerung für den Netzbetreiber. Der Mitnutzer erhält eine Info-Mail mit dem Zählerstand.'],
+            ['imp', 'HT/NT-Zähler: Die blaue Zählerkachel zeigt beide Zählwerke mit dem jeweiligen Verbrauch seit der letzten Ablesung.'],
+            ['fix', 'Abrechnung: Eine Ablesung am letzten Liefertag gilt als Schlussstand zum Vertragsende. Der Rest des Tages wird nicht mehr aus einer späteren Ablesung hochgerechnet, die überflüssige „anteilig“-Zeile entfällt.'],
+        ],
+    ],
+    [
         'version' => '1.0.0', 'date' => '2026-10-31', 'title' => 'Erste Version',
         'items' => [
             ['new', 'Zähler erfassen: analog oder digital, mit HT/NT-Mehrtarifregistern und OBIS-Codes, Bezug und Einspeisung.'],

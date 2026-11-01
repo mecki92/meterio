@@ -317,3 +317,6 @@ table .chip { padding: .15rem .5rem; font-size: .72rem; font-weight: 600; }
 .camlayer[hidden] { display: none; }
 .camlayer video { flex: 1 1 auto; min-height: 0; width: 100%; object-fit: contain; background: #000; }
 .cambar { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: 1rem; padding-bottom: calc(1rem + env(safe-area-inset-bottom)); background: rgba(0,0,0,.85); }
+
+.kpi-hero .k-val-sm { font-size: 1.7rem; }
+@media (max-width: 575.98px) { .kpi-hero .k-val-sm { font-size: 1.45rem; } }

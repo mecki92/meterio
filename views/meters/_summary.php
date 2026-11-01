@@ -9,6 +9,14 @@ foreach (['ET', 'HT'] as $t) {
     }
 }
 $main ??= $stats['regs'][0] ?? null;
+// HT/NT-Zähler: beide Zählwerke in der blauen Kachel
+$hero = $main ? [$main] : [];
+if ($main && $main['reg']['tariff'] === 'HT') {
+    foreach ($stats['regs'] as $x) {
+        if ($x['reg']['tariff'] === 'NT') { $hero[] = $x; break; }
+    }
+}
+$heroIds = array_map(static fn($x) => $x['reg']['id'], $hero);
 $kw = static fn(float $v) => number_format($v, 0, ',', '.');
 $ago = $stats['days_ago'];
 $agoTxt = $ago === null ? '' : ($ago === 0 ? 'heute' : ($ago === 1 ? 'gestern' : 'vor ' . $ago . ' Tagen'));
@@ -17,19 +25,28 @@ $agoTxt = $ago === null ? '' : ($ago === 0 ? 'heute' : ($ago === 1 ? 'gestern' :
     <div class="col-lg-4">
         <div class="kpi-hero">
             <div>
-                <div class="k-label"><i class="bi bi-speedometer2"></i> <?= $main ? e(Repo::registerTitle($main['reg'])) : 'Zählerstand' ?></div>
-                <?php if ($last && $main && $main['value'] !== null): ?>
-                    <div class="k-val"><?= e($kw($main['value'])) ?> kWh</div>
+                <?php if ($last && $hero): ?>
+                    <div class="<?= count($hero) > 1 ? 'row g-2' : '' ?>">
+                    <?php foreach ($hero as $h): ?>
+                        <div class="<?= count($hero) > 1 ? 'col-6' : '' ?>">
+                            <div class="k-label"><i class="bi bi-speedometer2"></i> <?= e(Repo::registerTitle($h['reg'])) ?></div>
+                            <?php if ($h['value'] !== null): ?>
+                                <div class="k-val<?= count($hero) > 1 ? ' k-val-sm' : '' ?>"><?= e($kw($h['value'])) ?> kWh</div>
+                            <?php else: ?><div class="k-val<?= count($hero) > 1 ? ' k-val-sm' : '' ?>">–</div><?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                    </div>
                     <div class="k-sub">Stand vom <?= e(fmt_date($last['read_at'])) ?> · <?= e($agoTxt) ?></div>
                 <?php else: ?>
+                    <div class="k-label"><i class="bi bi-speedometer2"></i> <?= $main ? e(Repo::registerTitle($main['reg'])) : 'Zählerstand' ?></div>
                     <div class="k-val">–</div>
                     <div class="k-sub">Noch keine Ablesung erfasst.</div>
                 <?php endif; ?>
             </div>
             <div class="yr">
-                <?php if ($main && $main['delta'] !== null): ?>
-                    <div class="d-flex justify-content-between"><span>Seit der letzten Ablesung</span><b>+<?= e($kw($main['delta'])) ?> kWh</b></div>
-                <?php else: ?>
+                <?php $any = false; foreach ($hero as $h): if ($h['delta'] === null) { continue; } $any = true; ?>
+                    <div class="d-flex justify-content-between"><span>Seit der letzten Ablesung<?= count($hero) > 1 ? ' · ' . e($h['reg']['tariff']) : '' ?></span><b>+<?= e($kw($h['delta'])) ?> kWh</b></div>
+                <?php endforeach; if (!$any): ?>
                     <div class="opacity-75">Ab zwei Ablesungen wird der Verbrauch berechnet.</div>
                 <?php endif; ?>
             </div>
@@ -37,7 +54,7 @@ $agoTxt = $ago === null ? '' : ($ago === 0 ? 'heute' : ($ago === 1 ? 'gestern' :
     </div>
     <div class="col-lg-8">
         <div class="row g-3 row-cols-2 row-cols-md-3">
-            <?php foreach ($stats['regs'] as $x): if ($main && $x['reg']['id'] === $main['reg']['id']) { continue; } ?>
+            <?php foreach ($stats['regs'] as $x): if (in_array($x['reg']['id'], $heroIds, true)) { continue; } ?>
                 <div class="col"><div class="kpi"><div class="k-label"><i class="bi bi-<?= $x['reg']['tariff'] === 'EXPORT' ? 'box-arrow-up' : 'lightning-charge' ?>"></i> <?= e(Repo::registerTitle($x['reg'])) ?></div>
                     <div class="k-val"><?= $x['value'] !== null ? e($kw($x['value'])) . ' kWh' : '–' ?></div>
                     <div class="k-sub"><?= $x['delta'] !== null ? '+' . e($kw($x['delta'])) . ' kWh seit letzter Ablesung' : 'Zählerstand' ?></div></div></div>

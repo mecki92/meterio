@@ -34,9 +34,12 @@ final class ReadingController
         $this->savePhotos((int) $m['user_id'], $rid);
         $msg = 'Ablesung gespeichert.';
         if ($m['access'] !== 'owner') {
-            $this->notifyOwner($u, $m, $readAt, $values);
-        }
-        if (isset($_POST['notify'])) {
+            // Freigegebener Zähler: der Eigentümer bekommt die Mail mit den Fotos, der Mitnutzer nur eine Info mit dem Zählerstand
+            $this->notifyOwner($u, $m, $rid, $readAt, $reason, $note, $values);
+            if (isset($_POST['notify'])) {
+                $msg .= $this->notifySharer($u, $m, $readAt, $reason, $values) ? ' Eine Info-Mail wurde dir gesendet; der Eigentümer erhält die Fotos.' : ' Die E-Mail konnte leider nicht gesendet werden.';
+            }
+        } elseif (isset($_POST['notify'])) {
             $msg .= $this->notify($u, $m, $rid, $readAt, $reason, $note, $values) ? ' Eine Kopie wurde dir per E-Mail gesendet.' : ' Die E-Mail konnte leider nicht gesendet werden.';
         }
         flash('ok', $msg);
@@ -309,26 +312,73 @@ final class ReadingController
         }
     }
 
-    /** Teilt dem Eigentümer mit, dass jemand mit Freigabe einen Zählerstand erfasst hat. */
-    private function notifyOwner(array $u, array $m, string $readAt, array $values): void
+    /** Fotos der Ablesung als Mail-Anhänge (max. 15 MB). */
+    private function attachments(int $ownerId, int $rid, string $readAt): array
+    {
+        $attach = [];
+        $total = 0;
+        foreach (Db::all('SELECT id, file_name FROM reading_photos WHERE reading_id=? ORDER BY id', [$rid]) as $i => $p) {
+            $bytes = ImageProcessor::read($ownerId, $p['file_name']);
+            if ($bytes === null || $total + strlen($bytes) > 15 * 1024 * 1024) {
+                continue;
+            }
+            $total += strlen($bytes);
+            $attach[] = ['zaehlerstand-' . $readAt . '-' . ($i + 1) . '.jpg', 'image/jpeg', $bytes];
+        }
+        return $attach;
+    }
+
+    private function valueRows(array $m, array $values): string
+    {
+        $rows = '';
+        foreach ($m['registers'] as $reg) {
+            if (isset($values[$reg['id']])) {
+                $rows .= '<li>' . e(Repo::registerTitle($reg)) . ': <b>' . e(nf((float) $values[$reg['id']], 0)) . ' kWh</b></li>';
+            }
+        }
+        return $rows;
+    }
+
+    /** Eigentümer: Mail mit den Fotos und der Erinnerung, den Stand beim Netzbetreiber einzutragen (immer, wenn ein Mitnutzer abliest). */
+    private function notifyOwner(array $u, array $m, int $rid, string $readAt, string $reason, string $note, array $values): void
     {
         try {
             $owner = Auth::findById((int) $m['user_id']);
             if (!$owner || empty($owner['email'])) {
                 return;
             }
-            $rows = '';
-            foreach ($m['registers'] as $reg) {
-                if (isset($values[$reg['id']])) {
-                    $rows .= '<li>' . e(Repo::registerTitle($reg)) . ': <b>' . e(nf((float) $values[$reg['id']], 0)) . ' kWh</b></li>';
-                }
-            }
+            $label = reading_reasons()[$reason][0] ?? 'Ablesung';
             $mName = mask_tail($m['name'], 4);
-            $body = '<p>Hallo ' . e($owner['name']) . ',</p><p><b>' . e($u['name']) . '</b> hat für deinen Zähler <b>' . e($mName) . '</b> einen neuen Zählerstand erfasst (Ablesung vom ' . e(fmt_date($readAt)) . '):</p>'
-                . '<ul>' . $rows . '</ul>' . Mailer::button(abs_url('meters/' . $m['id']), 'Zähler in meterio öffnen');
-            Mailer::send($owner['email'], 'Neuer Zählerstand von ' . $u['name'], Mailer::wrap('Neuer Zählerstand ⚡', $body));
+            $mLoc = mask_words((string) $m['location']);
+            $attach = $this->attachments((int) $m['user_id'], $rid, $readAt);
+            $body = '<p>Hallo ' . e($owner['name']) . ',</p>'
+                . '<p><b>' . e($u['name']) . '</b> hat für deinen Zähler einen neuen Zählerstand erfasst. Bitte trage ihn zusätzlich bei deinem <b>Netzbetreiber</b> ein bzw. melde ihn dort'
+                . ($attach ? ' – die Fotos des Zählers findest du im Anhang.' : '.') . '</p>'
+                . '<p style="margin:0 0 4px"><b>' . e($mName) . '</b>' . ($mLoc !== '' ? ' · ' . e($mLoc) : '') . '<br>Ablesung vom ' . e(fmt_date($readAt)) . ' · ' . e($label) . '</p>'
+                . '<ul>' . $this->valueRows($m, $values) . '</ul>'
+                . ($note !== '' ? '<p style="color:#6b7785">Notiz: ' . e($note) . '</p>' : '')
+                . Mailer::button(abs_url('meters/' . $m['id']), 'Zähler in meterio öffnen');
+            Mailer::send($owner['email'], 'Neuer Zählerstand ' . $mName . ' von ' . $u['name'] . ' (' . fmt_date($readAt) . ')', Mailer::wrap('Neuer Zählerstand ⚡', $body), null, $attach);
         } catch (Throwable $e) {
             error_log('[meterio notifyOwner] ' . $e->getMessage());
+        }
+    }
+
+    /** Mitnutzer: Info-Mail mit dem erfassten Zählerstand (ohne Fotos). */
+    private function notifySharer(array $u, array $m, string $readAt, string $reason, array $values): bool
+    {
+        try {
+            $label = reading_reasons()[$reason][0] ?? 'Ablesung';
+            $mName = mask_tail($m['name'], 4);
+            $body = '<p>Hallo ' . e($u['name']) . ',</p>'
+                . '<p>du hast soeben für den Zähler von <b>' . e((string) ($m['owner_name'] ?? 'dem Eigentümer')) . '</b> einen neuen Zählerstand erfasst. Der Eigentümer wurde informiert und erhält die Fotos.</p>'
+                . '<p style="margin:0 0 4px"><b>' . e($mName) . '</b><br>Ablesung vom ' . e(fmt_date($readAt)) . ' · ' . e($label) . '</p>'
+                . '<ul>' . $this->valueRows($m, $values) . '</ul>'
+                . Mailer::button(abs_url('meters/' . $m['id']), 'Zähler in meterio öffnen');
+            return Mailer::send($u['email'], 'Zählerstand erfasst ' . $mName . ' (' . fmt_date($readAt) . ')', Mailer::wrap('Zählerstand erfasst ⚡', $body));
+        } catch (Throwable $e) {
+            error_log('[meterio notifySharer] ' . $e->getMessage());
+            return false;
         }
     }
 
