@@ -9,6 +9,8 @@ return [
     [
         'version' => '1.0.1', 'date' => '2026-11-01', 'title' => 'Fotos an den Eigentümer, HT/NT-Kachel & Schlussstand',
         'items' => [
+            ['imp', 'Ablesung erfassen: Das Datum lässt sich direkt eintippen oder einfügen (z. B. 01.11.2026) und weiterhin im Kalender wählen. Als Anlass stehen nur noch A1–A4 (Ablesung) und B1–B3 (Berechnung) zur Auswahl; bisherige Werte bleiben in alten Ablesungen sichtbar.'],
+            ['fix', 'Ablesung erfassen: Der Tarif wird hinter der Registerbezeichnung nicht mehr doppelt angezeigt (z. B. „Niedertarif (NT) · Bezug Niedertarif (NT)“); das Icon bei „Zählerstand“ wurde ersetzt.'],
             ['imp', 'Geteilte Zähler: Liest ein Mitnutzer ab, bekommt der Eigentümer die E-Mail mit den Fotos und der Erinnerung für den Netzbetreiber. Der Mitnutzer erhält eine Info-Mail mit dem Zählerstand.'],
             ['imp', 'Zählerseite: Ablesetabellen aller Jahre haben gleiche Spaltenbreiten, der doppelte Button „Ablesung“ oben entfällt und der Hinweis zur Freigabe ist luftiger.'],
             ['imp', 'Die Kachel „Abschläge bezahlt“ zeigt keinen erwarteten Bonus mehr; er steht weiter in der Zahlungsliste des Vertrags.'],

@@ -221,19 +221,45 @@ function parse_dt(string $s): ?string
     return $d ? $d->format('Y-m-d H:i:s') : null;
 }
 
+/** Datum aus Eingabe: ISO (2026-11-01) oder deutsch (1.11.2026, 01.11.26, 01-11-2026, 01/11/2026, 01112026). */
+function parse_date_flex(string $s): ?string
+{
+    $s = trim($s);
+    if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})$/', $s, $m)) {
+        [$y, $mo, $d] = [(int) $m[1], (int) $m[2], (int) $m[3]];
+    } elseif (preg_match('/^(\d{1,2})[.\/\-\s](\d{1,2})[.\/\-\s](\d{2}|\d{4})$/', $s, $m) || preg_match('/^(\d{2})(\d{2})(\d{4})$/', $s, $m)) {
+        [$d, $mo, $y] = [(int) $m[1], (int) $m[2], (int) $m[3]];
+        if ($y < 100) {
+            $y += 2000;
+        }
+    } else {
+        return null;
+    }
+    return checkdate($mo, $d, $y) && $y >= 1990 ? sprintf('%04d-%02d-%02d', $y, $mo, $d) : null;
+}
+
 function parse_date(string $s): ?string
 {
     $d = DateTime::createFromFormat('!Y-m-d', $s);
     return ($d && $d->format('Y-m-d') === $s) ? $s : null;
 }
 
-/** Anlass einer Ablesung: key => [Label, Badge-Farbe]. */
+/**
+ * Ablesegrund: key => [Label, Badge-Farbe, Kürzel]. Die Einträge A1–B3 stehen zur Auswahl;
+ * die übrigen Schlüssel gibt es nur noch für bereits gespeicherte Ablesungen (siehe reading_reasons_selectable()).
+ */
 function reading_reasons(): array
 {
     return [
+        'a1'             => ['A1 · Ablesung Messstellenbetreiber', 'info', 'A1'],
+        'a2'             => ['A2 · Ablesung Netzbetreiber', 'info', 'A2'],
+        'a3'             => ['A3 · Ablesung Lieferant', 'info', 'A3'],
+        'a4'             => ['A4 · Ablesung Kunde', 'primary', 'A4'],
+        'b1'             => ['B1 · Berechnung Messstellenbetreiber', 'warning', 'B1'],
+        'b2'             => ['B2 · Berechnung Netzbetreiber', 'warning', 'B2'],
+        'b3'             => ['B3 · Berechnung Lieferant', 'warning', 'B3'],
+        // bisherige Werte (nicht mehr auswählbar)
         'regular'        => ['Reguläre Ablesung', 'secondary'],
-        'a4'             => ['A4 · Selbstablesung Kunde', 'primary', 'A4'],
-        'a2'             => ['A2 · Ablesung Messstellenbetreiber', 'info', 'A2'],
         's1'             => ['S1 · Schätzung Lieferant', 'warning', 'S1'],
         's2'             => ['S2 · Schätzung Messstellenbetreiber', 'warning', 'S2'],
         'contract_start' => ['Vertragsbeginn / Einzug', 'success'],
@@ -247,6 +273,31 @@ function reading_reasons(): array
         'estimated'      => ['Schätzwert', 'secondary'],
         'other'          => ['Sonstiges', 'secondary'],
     ];
+}
+
+/** Auswählbare Ablesegründe; ein bereits gespeicherter älterer Wert bleibt beim Bearbeiten wählbar. */
+function reading_reasons_selectable(?string $current = null): array
+{
+    $all = reading_reasons();
+    $out = array_slice($all, 0, 7, true);
+    if ($current !== null && $current !== '' && !isset($out[$current]) && isset($all[$current])) {
+        $out = [$current => [$all[$current][0] . ' (bisheriger Wert)']] + $out;
+    }
+    return $out;
+}
+
+/** Tarif-Zusatz für die Registerbezeichnung; leer, wenn die Bezeichnung den Tarif schon nennt. */
+function tariff_suffix(array $reg): string
+{
+    $label = mb_strtolower((string) $reg['label']);
+    $words = ['ET' => ['eintarif', 'bezug'], 'HT' => ['hochtarif', '(ht)'], 'NT' => ['niedertarif', '(nt)'],
+              'EXPORT' => ['einspeis', 'export'], 'OTHER' => ['sonstig']];
+    foreach ($words[$reg['tariff']] ?? [] as $w) {
+        if (str_contains($label, $w)) {
+            return '';
+        }
+    }
+    return tariff_labels()[$reg['tariff']] ?? '';
 }
 
 function tariff_labels(): array

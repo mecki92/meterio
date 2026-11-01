@@ -117,6 +117,24 @@
   }
 
   /* ---------- Ablesung: Plausibilität vorab prüfen, bei Warnung per Dialog bestätigen ---------- */
+  var rdate = document.getElementById('read_at'), rcal = document.getElementById('read_at_cal');
+  if (rdate && rcal) {
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    var norm = function () {
+      var m = rdate.value.trim().match(/^(\d{1,2})[.\/\-\s](\d{1,2})[.\/\-\s](\d{2}|\d{4})$/) || rdate.value.trim().match(/^(\d{2})(\d{2})(\d{4})$/);
+      var iso = rdate.value.trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      var d, mo, y;
+      if (iso) { y = +iso[1]; mo = +iso[2]; d = +iso[3]; } else if (m) { d = +m[1]; mo = +m[2]; y = +m[3]; if (y < 100) { y += 2000; } } else { rcal.value = ''; return; }
+      var t = new Date(y, mo - 1, d);
+      if (t.getFullYear() !== y || t.getMonth() !== mo - 1 || t.getDate() !== d) { rcal.value = ''; return; }
+      rdate.value = pad(d) + '.' + pad(mo) + '.' + y;
+      rcal.value = y + '-' + pad(mo) + '-' + pad(d);
+    };
+    rdate.addEventListener('blur', norm);
+    rdate.addEventListener('paste', function () { setTimeout(norm, 0); });
+    rcal.addEventListener('change', function () { if (rcal.value) { var p = rcal.value.split('-'); rdate.value = p[2] + '.' + p[1] + '.' + p[0]; } });
+    document.getElementById('read_at_pick').addEventListener('click', function () { norm(); try { rcal.showPicker(); } catch (e) { rcal.focus(); rcal.click(); } });
+  }
   var rform = document.getElementById('readingform');
   if (rform && window.bootstrap) {
     var force = document.getElementById('force'), modalEl = document.getElementById('plausModal');

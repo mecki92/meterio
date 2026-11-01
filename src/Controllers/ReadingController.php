@@ -10,7 +10,7 @@ final class ReadingController
         $all = Repo::readings($meterId);
         view('readings/form', [
             'title' => 'Ablesung erfassen', 'active' => 'meters', 'meter' => $m, 'reading' => null,
-            'prev' => $all ? end($all) : null, 'form' => ['read_at' => input_date(), 'reason' => 'regular', 'note' => '', 'values' => [], 'notify' => (int) ($u['notify_reading'] ?? 1) === 1],
+            'prev' => $all ? end($all) : null, 'form' => ['read_at' => input_date(), 'reason' => 'a4', 'note' => '', 'values' => [], 'notify' => (int) ($u['notify_reading'] ?? 1) === 1],
         ]);
     }
 
@@ -175,7 +175,7 @@ final class ReadingController
     /** @return array{0: ?string, 1: array, 2: string, 3: ?string} */
     private function input(array $m, ?int $ignoreReadingId): array
     {
-        $day = parse_date((string) ($_POST['read_at'] ?? ''));
+        $day = parse_date_flex((string) ($_POST['read_at'] ?? ''));
         $readAt = $day ? $day . ' 00:00:00' : null;   // Ablesung gilt für den Tag (ohne Uhrzeit)
         $note = mb_trim_len((string) ($_POST['note'] ?? ''), 1000);
         if (!$readAt) {
@@ -247,7 +247,7 @@ final class ReadingController
         $m = $this->meter($u, $meterId, true);
         $ignore = (int) ($_POST['ignore'] ?? 0);
         $ignore = $ignore > 0 && Repo::reading((int) $u['id'], $ignore) ? $ignore : null;
-        $day = parse_date((string) ($_POST['read_at'] ?? ''));
+        $day = parse_date_flex((string) ($_POST['read_at'] ?? ''));
         $values = [];
         foreach ($m['registers'] as $reg) {
             $v = parse_kwh($_POST['val'][$reg['id']] ?? '');
@@ -264,8 +264,8 @@ final class ReadingController
 
     private function reason(): string
     {
-        $r = (string) ($_POST['reason'] ?? 'regular');
-        return isset(reading_reasons()[$r]) ? $r : 'regular';
+        $r = (string) ($_POST['reason'] ?? 'a4');
+        return isset(reading_reasons()[$r]) ? $r : 'a4';
     }
 
     /** Schickt dem Benutzer den neuen Zählerstand samt Fotos als Erinnerung, ihn beim Netzbetreiber einzutragen. */
