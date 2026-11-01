@@ -325,3 +325,8 @@ table .chip { padding: .15rem .5rem; font-size: .72rem; font-weight: 600; }
 .reading-table .c-photos { width: 8.5rem; }
 .reading-table .c-edit { width: 3.75rem; }
 @media (max-width: 767.98px) { .reading-table { min-width: 520px; } .reading-table .c-date { width: 7rem; } .reading-table .c-photos { width: 6rem; } }
+
+/* Button im input-group, optisch wie ein Eingabefeld (z. B. Kalender-Button) */
+.btn-input { background: var(--bs-body-bg); border: var(--bs-border-width) solid var(--bs-border-color); color: var(--bs-secondary-color); padding-inline: .85rem; }
+.btn-input:hover, .btn-input:focus-visible { background: var(--bs-tertiary-bg); border-color: var(--bs-border-color); color: var(--bs-body-color); }
+.input-group > .btn-input { border-top-right-radius: var(--bs-border-radius) !important; border-bottom-right-radius: var(--bs-border-radius) !important; }

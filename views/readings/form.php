@@ -23,7 +23,7 @@ $maxMb = (int) Config::get('uploads.max_size_mb', 12);
                         <div class="col-sm-6"><label class="form-label" for="read_at">Datum der Ablesung</label>
                             <div class="input-group">
                                 <input type="text" id="read_at" name="read_at" class="form-control" value="<?= e(($iso = parse_date_flex((string) $form['read_at'])) ? fmt_date($iso) : $form['read_at']) ?>" placeholder="TT.MM.JJJJ" inputmode="numeric" autocomplete="off" required>
-                                <button type="button" class="btn btn-outline-secondary" id="read_at_pick" aria-label="Kalender öffnen" title="Kalender"><i class="bi bi-calendar3"></i></button>
+                                <button type="button" class="btn btn-input" id="read_at_pick" aria-label="Kalender öffnen" title="Kalender"><i class="bi bi-calendar3"></i></button>
                                 <input type="date" id="read_at_cal" tabindex="-1" aria-hidden="true" class="position-absolute opacity-0 pe-none" style="width:1px;height:1px" max="<?= e(date('Y-m-d')) ?>" value="<?= e($iso ?? '') ?>">
                             </div></div>
                         <div class="col-sm-6"><label class="form-label" for="reason">Anlass</label>
